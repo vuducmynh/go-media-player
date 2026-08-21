@@ -56,8 +56,10 @@ npm install
 npm run build
 cd ..
 
-# 3. Build file thực thi Go
-go build -o go-audio-player.exe .
+# 3. Build file thực thi Go (Windows Desktop)
+go build -tags desktop,production -ldflags "-H windowsgui" -o go-audio-player.exe .
+
+# Hoặc đơn giản là nhấp đúp chạy file build.bat
 
 # 4. Khởi chạy ứng dụng
 ./go-audio-player.exe
