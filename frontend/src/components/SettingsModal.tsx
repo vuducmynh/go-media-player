@@ -38,6 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleResetDefaults = () => {
     setFormData({
       folders: formData.folders,
+      activeFolder: formData.activeFolder || '',
       jumpSeconds: 5.0,
       slowSpeed: 0.5,
       holdSlowKey: 'KeyS',

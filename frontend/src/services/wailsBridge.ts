@@ -8,6 +8,7 @@ declare global {
           SelectFolderDialog: () => Promise<string>;
           AddFolder: (path: string) => Promise<string[]>;
           RemoveFolder: (path: string) => Promise<string[]>;
+          SetActiveFolder: (path: string) => Promise<void>;
           GetSettings: () => Promise<AppSettings>;
           SaveSettings: (settings: AppSettings) => Promise<void>;
           ScanFiles: () => Promise<MediaFile[]>;
@@ -58,12 +59,19 @@ export const WailsBridge = {
     return [];
   },
 
+  async setActiveFolder(path: string): Promise<void> {
+    if (window.go?.main?.App?.SetActiveFolder) {
+      await window.go.main.App.SetActiveFolder(path);
+    }
+  },
+
   async getSettings(): Promise<AppSettings> {
     if (window.go?.main?.App?.GetSettings) {
       return await window.go.main.App.GetSettings();
     }
     return {
       folders: [],
+      activeFolder: '',
       jumpSeconds: 5,
       slowSpeed: 0.5,
       holdSlowKey: 'KeyS',

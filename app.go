@@ -76,14 +76,21 @@ func (a *App) AddFolder(folderPath string) ([]string, error) {
 	cleanPath := filepath.Clean(folderPath)
 	settings := a.store.GetSettings()
 
-	// Check if already exists
+	alreadyExists := false
 	for _, f := range settings.Folders {
 		if strings.EqualFold(filepath.Clean(f), cleanPath) {
-			return settings.Folders, nil // Already added
+			alreadyExists = true
+			break
 		}
 	}
 
-	settings.Folders = append(settings.Folders, cleanPath)
+	if !alreadyExists {
+		settings.Folders = append(settings.Folders, cleanPath)
+	}
+
+	// Set as active folder
+	settings.ActiveFolder = cleanPath
+
 	if err := a.store.SaveSettings(settings); err != nil {
 		return nil, err
 	}
@@ -104,11 +111,30 @@ func (a *App) RemoveFolder(folderPath string) ([]string, error) {
 	}
 
 	settings.Folders = updated
+	if strings.EqualFold(settings.ActiveFolder, cleanPath) {
+		if len(updated) > 0 {
+			settings.ActiveFolder = updated[0]
+		} else {
+			settings.ActiveFolder = ""
+		}
+	}
+
 	if err := a.store.SaveSettings(settings); err != nil {
 		return nil, err
 	}
 
 	return settings.Folders, nil
+}
+
+// SetActiveFolder sets and persists current active folder
+func (a *App) SetActiveFolder(folderPath string) error {
+	settings := a.store.GetSettings()
+	if folderPath != "" {
+		settings.ActiveFolder = filepath.Clean(folderPath)
+	} else {
+		settings.ActiveFolder = ""
+	}
+	return a.store.SaveSettings(settings)
 }
 
 // GetSettings returns current application preferences

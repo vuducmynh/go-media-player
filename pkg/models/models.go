@@ -50,6 +50,7 @@ type PlaybackState struct {
 // AppSettings represents user-configurable preferences
 type AppSettings struct {
 	Folders           []string `json:"folders"`           // Monitored folder directories
+	ActiveFolder      string   `json:"activeFolder"`      // Currently selected active folder
 	JumpSeconds       float64  `json:"jumpSeconds"`       // Fast forward / backward delta (default: 5s)
 	SlowSpeed         float64  `json:"slowSpeed"`         // Speed when holding key (default: 0.5)
 	HoldSlowKey       string   `json:"holdSlowKey"`       // Key to hold (default: "KeyS" or "ShiftLeft")
@@ -66,6 +67,7 @@ type AppSettings struct {
 func DefaultSettings() AppSettings {
 	return AppSettings{
 		Folders:           []string{},
+		ActiveFolder:      "",
 		JumpSeconds:       5.0,
 		SlowSpeed:         0.5,
 		HoldSlowKey:       "KeyS",

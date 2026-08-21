@@ -10,6 +10,7 @@ import { useHotkeys } from './hooks/useHotkeys';
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>({
     folders: [],
+    activeFolder: '',
     jumpSeconds: 5.0,
     slowSpeed: 0.5,
     holdSlowKey: 'KeyS',
@@ -24,6 +25,8 @@ export const App: React.FC = () => {
 
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [currentFile, setCurrentFile] = useState<MediaFile | null>(null);
+  const [activeFolder, setActiveFolder] = useState<string>('');
+
   const [scanProgress, setScanProgress] = useState<ScanProgress>({
     totalFolders: 0,
     scannedFiles: 0,
@@ -34,7 +37,6 @@ export const App: React.FC = () => {
 
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedFolderFilter, setSelectedFolderFilter] = useState<string>('');
 
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isHotkeysOpen, setIsHotkeysOpen] = useState<boolean>(false);
@@ -45,6 +47,13 @@ export const App: React.FC = () => {
     try {
       const loadedSettings = await WailsBridge.getSettings();
       setSettings(loadedSettings);
+
+      // Determine active folder
+      let currentActive = loadedSettings.activeFolder;
+      if (!currentActive && loadedSettings.folders && loadedSettings.folders.length > 0) {
+        currentActive = loadedSettings.folders[0];
+      }
+      setActiveFolder(currentActive || '');
 
       if (loadedSettings.folders && loadedSettings.folders.length > 0) {
         setScanProgress((prev) => ({ ...prev, isScanning: true }));
@@ -71,6 +80,13 @@ export const App: React.FC = () => {
     };
   }, [loadData]);
 
+  // Handle switching active folder
+  const handleSelectFolder = async (folderPath: string) => {
+    setActiveFolder(folderPath);
+    setSettings((prev) => ({ ...prev, activeFolder: folderPath }));
+    await WailsBridge.setActiveFolder(folderPath);
+  };
+
   // Handle adding folder
   const handleAddFolder = async () => {
     try {
@@ -78,7 +94,8 @@ export const App: React.FC = () => {
       if (!selectedPath) return;
 
       const updatedFolders = await WailsBridge.addFolder(selectedPath);
-      setSettings((prev) => ({ ...prev, folders: updatedFolders }));
+      setSettings((prev) => ({ ...prev, folders: updatedFolders, activeFolder: selectedPath }));
+      setActiveFolder(selectedPath);
 
       // Rescan files
       setScanProgress((prev) => ({ ...prev, isScanning: true }));
@@ -94,7 +111,12 @@ export const App: React.FC = () => {
   const handleRemoveFolder = async (folderPath: string) => {
     try {
       const updatedFolders = await WailsBridge.removeFolder(folderPath);
-      setSettings((prev) => ({ ...prev, folders: updatedFolders }));
+      let newActive = activeFolder;
+      if (activeFolder === folderPath) {
+        newActive = updatedFolders.length > 0 ? updatedFolders[0] : '';
+      }
+      setSettings((prev) => ({ ...prev, folders: updatedFolders, activeFolder: newActive }));
+      setActiveFolder(newActive);
 
       // Rescan files
       setScanProgress((prev) => ({ ...prev, isScanning: true }));
@@ -187,10 +209,12 @@ export const App: React.FC = () => {
     [currentFile]
   );
 
-  // Filtered files for next/previous navigation
-  const filteredFiles = useMemo(() => {
+  // Filtered files within active folder for next/previous navigation
+  const activeFolderFiles = useMemo(() => {
     return files.filter((file) => {
-      if (selectedFolderFilter && file.folderRoot !== selectedFolderFilter) return false;
+      if (activeFolder && activeFolder !== 'ALL' && file.folderRoot !== activeFolder) {
+        return false;
+      }
       if (activeFilter === 'audio' && file.type !== 'audio') return false;
       if (activeFilter === 'video' && file.type !== 'video') return false;
       if (activeFilter === 'in_progress' && (file.completed || file.lastPosition <= 0)) return false;
@@ -204,29 +228,29 @@ export const App: React.FC = () => {
       }
       return true;
     });
-  }, [files, selectedFolderFilter, activeFilter, searchQuery]);
+  }, [files, activeFolder, activeFilter, searchQuery]);
 
   const handlePlayNext = () => {
-    if (!currentFile || filteredFiles.length === 0) return;
-    const currentIndex = filteredFiles.findIndex(
+    if (!currentFile || activeFolderFiles.length === 0) return;
+    const currentIndex = activeFolderFiles.findIndex(
       (f) => f.fingerprint === currentFile.fingerprint
     );
-    if (currentIndex >= 0 && currentIndex < filteredFiles.length - 1) {
-      setCurrentFile(filteredFiles[currentIndex + 1]);
-    } else if (filteredFiles.length > 0) {
-      setCurrentFile(filteredFiles[0]); // Loop around to first
+    if (currentIndex >= 0 && currentIndex < activeFolderFiles.length - 1) {
+      setCurrentFile(activeFolderFiles[currentIndex + 1]);
+    } else if (activeFolderFiles.length > 0) {
+      setCurrentFile(activeFolderFiles[0]); // Loop around to first
     }
   };
 
   const handlePlayPrev = () => {
-    if (!currentFile || filteredFiles.length === 0) return;
-    const currentIndex = filteredFiles.findIndex(
+    if (!currentFile || activeFolderFiles.length === 0) return;
+    const currentIndex = activeFolderFiles.findIndex(
       (f) => f.fingerprint === currentFile.fingerprint
     );
     if (currentIndex > 0) {
-      setCurrentFile(filteredFiles[currentIndex - 1]);
-    } else if (filteredFiles.length > 0) {
-      setCurrentFile(filteredFiles[filteredFiles.length - 1]);
+      setCurrentFile(activeFolderFiles[currentIndex - 1]);
+    } else if (activeFolderFiles.length > 0) {
+      setCurrentFile(activeFolderFiles[activeFolderFiles.length - 1]);
     }
   };
 
@@ -242,9 +266,7 @@ export const App: React.FC = () => {
   // Hotkey Handlers
   useHotkeys(
     {
-      togglePlay: () => {
-        // Handled directly inside PlayerView via ref/events or hotkey
-      },
+      togglePlay: () => {},
       seekDelta: (seconds: number) => {},
       adjustSpeed: (delta: number) => {},
       setSlowSpeedActive: (active: boolean) => {
@@ -263,7 +285,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-fluent-bg-darker text-fluent-text-primary">
-      {/* Sidebar */}
+      {/* Sidebar with isolated Folder Switcher */}
       <Sidebar
         files={files}
         currentFile={currentFile}
@@ -271,14 +293,14 @@ export const App: React.FC = () => {
         scanProgress={scanProgress}
         activeFilter={activeFilter}
         searchQuery={searchQuery}
-        selectedFolderFilter={selectedFolderFilter}
+        activeFolder={activeFolder}
         onSelectFile={handleSelectFile}
         onAddFolder={handleAddFolder}
         onRemoveFolder={handleRemoveFolder}
+        onSelectFolder={handleSelectFolder}
         onRescan={handleRescan}
         onFilterChange={setActiveFilter}
         onSearchChange={setSearchQuery}
-        onFolderFilterChange={setSelectedFolderFilter}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenHotkeysGuide={() => setIsHotkeysOpen(true)}
         onOpenFileFolder={handleOpenFileFolder}

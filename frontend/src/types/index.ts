@@ -37,6 +37,7 @@ export interface PlaybackState {
 
 export interface AppSettings {
   folders: string[];
+  activeFolder: string;
   jumpSeconds: number;
   slowSpeed: number;
   holdSlowKey: string;
