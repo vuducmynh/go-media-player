@@ -16,7 +16,14 @@ if %errorlevel% neq 0 (
 cd ..
 
 echo.
-echo [2/2] Building Go Desktop Binary (.exe)...
+echo [2/3] Generating Windows Icon and Resources (.syso)...
+go-winres make
+if %errorlevel% neq 0 (
+    echo [WARNING] go-winres not found or failed, using existing resources.
+)
+
+echo.
+echo [3/3] Building Go Desktop Binary (.exe)...
 go build -tags desktop,production -ldflags "-H windowsgui" -o go-audio-player.exe .
 if %errorlevel% neq 0 (
     echo [ERROR] Go build failed!
