@@ -31,17 +31,9 @@ type Store struct {
 	data     StoreData
 }
 
-// NewStore initializes or loads persistent JSON storage from AppData
+// NewStore initializes or loads persistent JSON storage (portable or AppData)
 func NewStore() (*Store, error) {
-	appDataDir, err := os.UserConfigDir()
-	if err != nil {
-		appDataDir = "."
-	}
-	appDir := filepath.Join(appDataDir, "GoAudioPlay")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return nil, fmt.Errorf("create app data dir failed: %w", err)
-	}
-
+	appDir := GetDataDir()
 	dataFilePath := filepath.Join(appDir, "storage.json")
 	store := &Store{
 		filePath: dataFilePath,

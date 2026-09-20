@@ -6,6 +6,7 @@ import {
   DictationAttempt,
   TranscribeProgress,
   GPUInfo,
+  HardwareInfo,
 } from '../../entities/study/types';
 
 declare global {
@@ -20,9 +21,9 @@ declare global {
           GetSettings: () => Promise<AppSettings>;
           SaveSettings: (settings: AppSettings) => Promise<void>;
           ScanFiles: () => Promise<MediaFile[]>;
-          AddYouTubeVideo: (url: string) => Promise<MediaFile>;
-          GetYouTubeVideos: () => Promise<MediaFile[]>;
-          RemoveYouTubeVideo: (videoId: string) => Promise<void>;
+          ScanDirectory: (dirPath: string) => Promise<MediaFile[]>;
+          GetSavedSettings: () => Promise<AppSettings>;
+          SelectDirectory: () => Promise<string>;
           SavePlaybackProgress: (
             fingerprint: string,
             path: string,
@@ -35,11 +36,13 @@ declare global {
           ClearAllPlaybackProgress: () => Promise<void>;
           GetStreamURL: (filePath: string) => Promise<string>;
           OpenFileInExplorer: (filePath: string) => Promise<void>;
-
-          // Study & Whisper Methods
-          GetLesson: (fingerprint: string) => Promise<Lesson | null>;
+          OpenInExplorer: (filePath: string) => Promise<void>;
+          GetYouTubeVideos: () => Promise<MediaFile[]>;
+          AddYouTubeVideo: (url: string) => Promise<MediaFile | null>;
+          RemoveYouTubeVideo: (videoId: string) => Promise<void>;
           GetInstalledModels: () => Promise<ModelInfo[]>;
           DownloadModel: (modelId: string) => Promise<void>;
+          GetLesson: (fingerprint: string) => Promise<Lesson | null>;
           ProcessLesson: (
             fingerprint: string,
             title: string,
@@ -73,6 +76,12 @@ declare global {
           CancelLessonProcessing: (fingerprint: string) => Promise<boolean>;
           GetGPUInfo: () => Promise<GPUInfo>;
           DownloadGPUAcceleration: () => Promise<void>;
+          GetHardwareInfo: () => Promise<HardwareInfo>;
+          DeleteModel: (modelId: string) => Promise<void>;
+          ImportLocalModel: (filePath: string) => Promise<ModelInfo>;
+          SelectModelFile: () => Promise<string>;
+          ExportBackupData: () => Promise<string>;
+          ImportBackupData: () => Promise<number>;
         };
       };
     };
@@ -309,6 +318,59 @@ export const WailsBridge = {
     if (window.go?.main?.App?.DownloadGPUAcceleration) {
       await window.go.main.App.DownloadGPUAcceleration();
     }
+  },
+
+  async getHardwareInfo(): Promise<HardwareInfo> {
+    if (window.go?.main?.App?.GetHardwareInfo) {
+      return await window.go.main.App.GetHardwareInfo();
+    }
+    return {
+      gpuVendor: 'unknown',
+      gpuName: '',
+      vramMb: 0,
+      cpuCores: 4,
+      cpuThreads: 4,
+      ramMb: 8192,
+      accelerationType: 'cpu_avx',
+      accelerationEnabled: false,
+      recommendedBackend: 'cpu',
+      isPortable: false,
+      dataDir: '',
+    };
+  },
+
+  async deleteModel(modelId: string): Promise<void> {
+    if (window.go?.main?.App?.DeleteModel) {
+      await window.go.main.App.DeleteModel(modelId);
+    }
+  },
+
+  async importLocalModel(filePath: string): Promise<ModelInfo> {
+    if (window.go?.main?.App?.ImportLocalModel) {
+      return await window.go.main.App.ImportLocalModel(filePath);
+    }
+    throw new Error('ImportLocalModel not available');
+  },
+
+  async selectModelFile(): Promise<string> {
+    if (window.go?.main?.App?.SelectModelFile) {
+      return await window.go.main.App.SelectModelFile();
+    }
+    return '';
+  },
+
+  async exportBackupData(): Promise<string> {
+    if (window.go?.main?.App?.ExportBackupData) {
+      return await window.go.main.App.ExportBackupData();
+    }
+    throw new Error('ExportBackupData not available');
+  },
+
+  async importBackupData(): Promise<number> {
+    if (window.go?.main?.App?.ImportBackupData) {
+      return await window.go.main.App.ImportBackupData();
+    }
+    throw new Error('ImportBackupData not available');
   },
 
   // Event Listeners

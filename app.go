@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"go-audio-play/internal/application"
 	"go-audio-play/internal/domain/library"
@@ -338,4 +339,82 @@ func (a *App) UpdateSentenceVisibility(fingerprint, sentenceID string, revealed 
 	}
 	return a.studySvc.UpdateSentenceVisibility(fingerprint, sentenceID, revealed)
 }
+
+// GetHardwareInfo retrieves complete GPU, CPU, RAM, and storage topology
+func (a *App) GetHardwareInfo() study.HardwareInfo {
+	if a.studySvc == nil {
+		return study.HardwareInfo{}
+	}
+	return a.studySvc.GetHardwareInfo()
+}
+
+// DeleteModel deletes a downloaded model file
+func (a *App) DeleteModel(modelID string) error {
+	if a.studySvc == nil {
+		return fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.DeleteModel(modelID)
+}
+
+// ImportLocalModel copies or links a user-provided .bin model file
+func (a *App) ImportLocalModel(filePath string) (*study.ModelInfo, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.ImportLocalModel(filePath)
+}
+
+// SelectModelFile opens a file picker for the user to select an existing .bin model
+func (a *App) SelectModelFile() (string, error) {
+	return wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Chọn mô hình AI Whisper (.bin)",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "GGML Whisper Model (*.bin)", Pattern: "*.bin"},
+		},
+	})
+}
+
+// ExportBackupData prompts the user for a destination zip path and exports all lessons and settings
+func (a *App) ExportBackupData() (string, error) {
+	if a.studySvc == nil {
+		return "", fmt.Errorf("study service not initialized")
+	}
+
+	destPath, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "Sao lưu toàn bộ bài học và dữ liệu GoAudioPlay",
+		DefaultFilename: fmt.Sprintf("GoAudioPlay_Backup_%s.zip", time.Now().Format("20060102_150405")),
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "Tệp nén ZIP (*.zip)", Pattern: "*.zip"},
+		},
+	})
+	if err != nil || destPath == "" {
+		return "", err
+	}
+
+	if err := a.studySvc.ExportBackup(destPath); err != nil {
+		return "", err
+	}
+
+	return destPath, nil
+}
+
+// ImportBackupData prompts user to pick a backup zip and imports all lessons and settings
+func (a *App) ImportBackupData() (int, error) {
+	if a.studySvc == nil {
+		return 0, fmt.Errorf("study service not initialized")
+	}
+
+	srcPath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Chọn tệp sao lưu GoAudioPlay (*.zip)",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "Tệp nén ZIP (*.zip)", Pattern: "*.zip"},
+		},
+	})
+	if err != nil || srcPath == "" {
+		return 0, err
+	}
+
+	return a.studySvc.ImportBackup(srcPath)
+}
+
 

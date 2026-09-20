@@ -6,36 +6,92 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"go-audio-play/internal/domain/study"
+	"go-audio-play/internal/infrastructure/storage"
 )
 
 var defaultModels = []study.ModelInfo{
 	{
-		ID:          "large-v3-turbo-q5_0",
-		Name:        "Whisper Large-v3 Turbo Q5 (Khuyên dùng)",
-		Description: "Dung lượng ~547 MB. Siêu tốc, độ chính xác cao cho luyện nghe tiếng Anh, nối âm và ngữ điệu.",
-		SizeMB:      547,
-		URL:         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
-		Recommended: true,
+		ID:             "large-v3-turbo-q5_0",
+		Name:           "Whisper Large-v3 Turbo Q5 (Khuyên dùng)",
+		Description:    "Kiến trúc tối ưu 4 lớp giải mã. Tốc độ siêu nhanh, độ chính xác gần tương đương Large v3 gốc, nhận diện tốt nối âm và ngữ điệu.",
+		SizeMB:         547,
+		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+		Recommended:    true,
+		RequiredVRAMMB: 2500,
+		RequiredRAMMB:  4096,
+		Params:         "809M",
+		RelativeSpeed:  "~8x",
+		AccuracyLevel:  "Xuất sắc (99%)",
 	},
 	{
-		ID:          "base",
-		Name:        "Whisper Base (Siêu nhẹ)",
-		Description: "Dung lượng ~142 MB. Tốc độ rất nhanh, phù hợp máy cấu hình khiêm tốn hoặc thử nghiệm.",
-		SizeMB:      142,
-		URL:         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-		Recommended: false,
+		ID:             "base",
+		Name:           "Whisper Base (Siêu nhẹ & Nhanh)",
+		Description:    "Tốc độ xử lý chớp nhoáng, dung lượng nhỏ gọn, chạy nhẹ nhàng trên mọi máy tính và laptop văn phòng.",
+		SizeMB:         142,
+		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+		Recommended:    false,
+		RequiredVRAMMB: 800,
+		RequiredRAMMB:  2048,
+		Params:         "74M",
+		RelativeSpeed:  "~16x",
+		AccuracyLevel:  "Khá (88%)",
 	},
 	{
-		ID:          "large-v3-q5_0",
-		Name:        "Whisper Large-v3 Q5 (Cao cấp)",
-		Description: "Dung lượng ~1.1 GB. Độ chính xác tối đa cho mọi accent khó, cần máy có GPU rời hoặc RAM khỏe.",
-		SizeMB:      1080,
-		URL:         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin",
-		Recommended: false,
+		ID:             "small",
+		Name:           "Whisper Small (Cân bằng)",
+		Description:    "Cân bằng xuất sắc giữa thời gian giải mã và độ chính xác bắt chữ tiếng Anh thông dụng.",
+		SizeMB:         466,
+		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
+		Recommended:    false,
+		RequiredVRAMMB: 1500,
+		RequiredRAMMB:  4096,
+		Params:         "244M",
+		RelativeSpeed:  "~6x",
+		AccuracyLevel:  "Tốt (94%)",
+	},
+	{
+		ID:             "large-v3-q5_0",
+		Name:           "Whisper Large-v3 Q5 (Cao cấp)",
+		Description:    "Độ chính xác tối đa cho các bài nghe IELTS khó, người nói giọng địa phương hoặc lẫn nhạc nền. Cần GPU rời hoặc CPU khỏe.",
+		SizeMB:         1080,
+		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin",
+		Recommended:    false,
+		RequiredVRAMMB: 5500,
+		RequiredRAMMB:  8192,
+		Params:         "1550M",
+		RelativeSpeed:  "~1x",
+		AccuracyLevel:  "Đỉnh cao (99.6%)",
+	},
+	{
+		ID:             "tiny",
+		Name:           "Whisper Tiny (Siêu tốc)",
+		Description:    "Mô hình nhỏ nhất (~75MB). Tốc độ giải mã nhanh nhất, phù hợp lướt nhanh bài nghe.",
+		SizeMB:         75,
+		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+		Recommended:    false,
+		RequiredVRAMMB: 400,
+		RequiredRAMMB:  1024,
+		Params:         "39M",
+		RelativeSpeed:  "~32x",
+		AccuracyLevel:  "Cơ bản (80%)",
+	},
+	{
+		ID:             "medium",
+		Name:           "Whisper Medium (Chuyên sâu)",
+		Description:    "Khả năng bắt từ chuyên ngành tốt. Đòi hỏi cấu hình tầm trung trở lên.",
+		SizeMB:         1530,
+		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
+		Recommended:    false,
+		RequiredVRAMMB: 3500,
+		RequiredRAMMB:  8192,
+		Params:         "769M",
+		RelativeSpeed:  "~2x",
+		AccuracyLevel:  "Rất cao (97%)",
 	},
 }
 
@@ -46,13 +102,9 @@ type ModelManager struct {
 	activeCancel map[string]chan struct{}
 }
 
-// NewModelManager initializes the model storage directory
+// NewModelManager initializes the model storage directory using smart path resolution
 func NewModelManager() (*ModelManager, error) {
-	appDataDir, err := os.UserConfigDir()
-	if err != nil {
-		appDataDir = "."
-	}
-	modelsDir := filepath.Join(appDataDir, "GoAudioPlay", "models")
+	modelsDir := storage.GetPrimaryModelsDir()
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create models directory: %w", err)
 	}
@@ -63,23 +115,32 @@ func NewModelManager() (*ModelManager, error) {
 	}, nil
 }
 
-// GetModels returns the list of supported models with download status
+// GetModels returns the list of supported models with download status and hardware match
 func (m *ModelManager) GetModels() []study.ModelInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	hw := DetectHardware(m.modelsDir)
+
 	result := make([]study.ModelInfo, len(defaultModels))
 	for i, def := range defaultModels {
 		item := def
-		expectedPath := filepath.Join(m.modelsDir, fmt.Sprintf("ggml-%s.bin", def.ID))
-		info, err := os.Stat(expectedPath)
-		if err == nil && info.Size() > 0 {
+		fileName := fmt.Sprintf("ggml-%s.bin", def.ID)
+
+		// Check all potential model search locations
+		if foundPath, found := storage.FindExistingModel(fileName); found {
 			item.Downloaded = true
-			item.FilePath = expectedPath
+			item.FilePath = foundPath
 		} else {
 			item.Downloaded = false
 			item.FilePath = ""
 		}
+
+		// Dynamically compute hardware compatibility
+		match, tip := EvaluateModelMatch(item, hw)
+		item.HardwareMatch = match
+		item.HardwareTip = tip
+
 		result[i] = item
 	}
 
@@ -91,12 +152,76 @@ func (m *ModelManager) GetModelPath(modelID string) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	path := filepath.Join(m.modelsDir, fmt.Sprintf("ggml-%s.bin", modelID))
-	info, err := os.Stat(path)
-	if err != nil || info.Size() == 0 {
-		return "", fmt.Errorf("model %s is not downloaded", modelID)
+	fileName := fmt.Sprintf("ggml-%s.bin", modelID)
+	if path, found := storage.FindExistingModel(fileName); found {
+		return path, nil
 	}
-	return path, nil
+
+	// Try direct modelID if custom file
+	if path, found := storage.FindExistingModel(modelID); found {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("model %s is not downloaded or found", modelID)
+}
+
+// DeleteModel removes a downloaded model file to free disk space
+func (m *ModelManager) DeleteModel(modelID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	fileName := fmt.Sprintf("ggml-%s.bin", modelID)
+	foundPath, found := storage.FindExistingModel(fileName)
+	if !found {
+		return fmt.Errorf("model file not found")
+	}
+
+	return os.Remove(foundPath)
+}
+
+// ImportLocalModel imports an existing .bin model from disk into the primary models directory
+func (m *ModelManager) ImportLocalModel(srcFilePath string) (*study.ModelInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	info, err := os.Stat(srcFilePath)
+	if err != nil || info.IsDir() {
+		return nil, fmt.Errorf("invalid model file: %w", err)
+	}
+
+	baseName := filepath.Base(srcFilePath)
+	targetPath := filepath.Join(m.modelsDir, baseName)
+
+	if srcFilePath != targetPath {
+		in, err := os.Open(srcFilePath)
+		if err != nil {
+			return nil, err
+		}
+		defer in.Close()
+
+		out, err := os.Create(targetPath)
+		if err != nil {
+			return nil, err
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, in); err != nil {
+			return nil, err
+		}
+	}
+
+	// Match ID from filename
+	modelID := strings.TrimSuffix(baseName, ".bin")
+	modelID = strings.TrimPrefix(modelID, "ggml-")
+
+	return &study.ModelInfo{
+		ID:          modelID,
+		Name:        "Custom: " + baseName,
+		Description: fmt.Sprintf("Mô hình tùy chỉnh import từ máy (Dung lượng: %d MB)", info.Size()/(1024*1024)),
+		SizeMB:      int(info.Size() / (1024 * 1024)),
+		Downloaded:  true,
+		FilePath:    targetPath,
+	}, nil
 }
 
 // DownloadModel downloads a model file with real-time progress callbacks and cancel support
@@ -164,7 +289,6 @@ func (m *ModelManager) DownloadModel(modelID string, onProgress func(study.Model
 	if resp.StatusCode == http.StatusPartialContent {
 		totalBytes += existingBytes
 	} else if existingBytes > 0 && resp.StatusCode == http.StatusOK {
-		// Server didn't honor range, start fresh
 		existingBytes = 0
 	}
 

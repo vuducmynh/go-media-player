@@ -75,6 +75,13 @@ export interface ModelInfo {
   filePath?: string;
   url: string;
   recommended: boolean;
+  requiredVramMb?: number;
+  requiredRamMb?: number;
+  params?: string;
+  relativeSpeed?: string;
+  accuracyLevel?: string;
+  hardwareMatch?: 'perfect' | 'good' | 'heavy' | string;
+  hardwareTip?: string;
 }
 
 export interface ModelDownloadProgress {
@@ -103,4 +110,19 @@ export interface GPUInfo {
   gpuName: string;
   gpuEnabled: boolean;
 }
+
+export interface HardwareInfo {
+  gpuVendor: 'nvidia' | 'amd' | 'intel' | 'unknown';
+  gpuName: string;
+  vramMb: number;
+  cpuCores: number;
+  cpuThreads: number;
+  ramMb: number;
+  accelerationType: string;
+  accelerationEnabled: boolean;
+  recommendedBackend: string;
+  isPortable: boolean;
+  dataDir: string;
+}
+
 

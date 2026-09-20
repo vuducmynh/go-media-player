@@ -284,3 +284,29 @@ func (s *StudyService) UpdateSentenceVisibility(fingerprint string, sentenceID s
 
 	return lesson, nil
 }
+
+// GetHardwareInfo returns multi-vendor hardware topology and storage details
+func (s *StudyService) GetHardwareInfo() study.HardwareInfo {
+	return s.whisperEngine.GetHardwareInfo()
+}
+
+// DeleteModel removes a downloaded model file
+func (s *StudyService) DeleteModel(modelID string) error {
+	return s.modelManager.DeleteModel(modelID)
+}
+
+// ImportLocalModel imports an existing .bin model from disk
+func (s *StudyService) ImportLocalModel(filePath string) (*study.ModelInfo, error) {
+	return s.modelManager.ImportLocalModel(filePath)
+}
+
+// ExportBackup archives all lessons and settings into a ZIP file
+func (s *StudyService) ExportBackup(destZipPath string) error {
+	return storage.ExportBackup(destZipPath)
+}
+
+// ImportBackup extracts lessons and settings from a backup ZIP file
+func (s *StudyService) ImportBackup(srcZipPath string) (int, error) {
+	return storage.ImportBackup(srcZipPath)
+}
+

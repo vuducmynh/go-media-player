@@ -12,13 +12,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"go-audio-play/internal/domain/study"
+	"go-audio-play/internal/infrastructure/storage"
 )
 
 var (
@@ -36,11 +36,7 @@ type Engine struct {
 
 // NewEngine initializes the whisper.cpp native engine
 func NewEngine(modelManager *ModelManager) (*Engine, error) {
-	appDataDir, err := os.UserConfigDir()
-	if err != nil {
-		appDataDir = "."
-	}
-	binDir := filepath.Join(appDataDir, "GoAudioPlay", "bin")
+	binDir := storage.GetPrimaryBinDir()
 	_ = os.MkdirAll(binDir, 0755)
 
 	e := &Engine{
@@ -55,32 +51,24 @@ func NewEngine(modelManager *ModelManager) (*Engine, error) {
 	return e, nil
 }
 
-// EnsureCLI ensures whisper-cli.exe is present, downloading prebuilt release if missing
+// EnsureCLI ensures whisper-cli.exe is present, checking portable and AppData paths
 func (e *Engine) EnsureCLI() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	// 1. Check in AppData/GoAudioPlay/bin/
-	appDataCLI := filepath.Join(e.binDir, "whisper-cli.exe")
-	if _, err := os.Stat(appDataCLI); err == nil {
-		e.cliPath = appDataCLI
+	// 1. Check all candidate bin search directories (portable ./bin, %APPDATA%/GoAudioPlay/bin)
+	if existingCLI, found := storage.FindExistingBinary("whisper-cli.exe"); found {
+		e.cliPath = existingCLI
 		return nil
 	}
 
-	// 2. Check in current directory or relative bin/
-	localCLI := filepath.Join("bin", "whisper-cli.exe")
-	if _, err := os.Stat(localCLI); err == nil {
-		e.cliPath = localCLI
-		return nil
-	}
-
-	// 3. Check system PATH
+	// 2. Check system PATH
 	if path, err := exec.LookPath("whisper-cli"); err == nil {
 		e.cliPath = path
 		return nil
 	}
 
-	// 4. Download prebuilt Windows x64 binary (~8.5 MB)
+	// 3. Download prebuilt Windows x64 binary (~8.5 MB)
 	zipURL := "https://github.com/ggml-org/whisper.cpp/releases/download/b5130/whisper-bin-x64.zip"
 	tempZip := filepath.Join(e.binDir, "whisper-bin-x64.zip")
 
@@ -118,12 +106,13 @@ func (e *Engine) EnsureCLI() error {
 		_ = os.RemoveAll(filepath.Join(e.binDir, "Release"))
 	}
 
-	if _, err := os.Stat(appDataCLI); err == nil {
-		e.cliPath = appDataCLI
+	installedCLI := filepath.Join(e.binDir, "whisper-cli.exe")
+	if _, err := os.Stat(installedCLI); err == nil {
+		e.cliPath = installedCLI
 		return nil
 	}
 
-	return fmt.Errorf("whisper-cli.exe could not be installed to %s", appDataCLI)
+	return fmt.Errorf("whisper-cli.exe could not be installed to %s", installedCLI)
 }
 
 // ConvertTo16kHzWav converts any audio or video container to 16kHz 16-bit mono WAV using ffmpeg
@@ -200,18 +189,9 @@ func (e *Engine) Transcribe(
 		_ = os.Remove(jsonFile)
 	}()
 
-	// Determine optimal processors and threads for user's CPU
-	numCPU := runtime.NumCPU()
-	processors := 1
-	threads := numCPU
-
-	if numCPU >= 8 {
-		processors = 2
-		threads = 4
-	} else if numCPU >= 4 {
-		processors = 1
-		threads = numCPU
-	}
+	// Interrogate hardware topology and calculate optimal compute parameters
+	hw := DetectHardware(e.binDir)
+	processors, threads, useGPU := GetOptimalWhisperArgs(hw)
 
 	// Construct whisper-cli command:
 	// -m: model path
@@ -236,6 +216,11 @@ func (e *Engine) Transcribe(
 		"-bs", "1",
 		"-bo", "1",
 		"-fa",
+	}
+
+	if useGPU {
+		// Offload all 99 layers into GPU VRAM for maximum GPU acceleration
+		args = append(args, "-ngl", "99")
 	}
 
 	cmd := exec.CommandContext(ctx, e.cliPath, args...)
@@ -435,44 +420,35 @@ func unzip(src, dest string) error {
 	return nil
 }
 
-// GetGPUInfo detects NVIDIA GPU and checks if CUDA acceleration files are present
+// GetGPUInfo detects GPU and checks if hardware acceleration is present (backward compat)
 func (e *Engine) GetGPUInfo() study.GPUInfo {
-	info := study.GPUInfo{}
-	if runtime.GOOS != "windows" {
-		return info
+	hw := DetectHardware(e.binDir)
+	return study.GPUInfo{
+		HasNvidiaGPU: hw.GPUVendor == "nvidia",
+		GPUName:      hw.GPUName,
+		GPUEnabled:   hw.AccelerationEnabled,
 	}
-
-	cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader")
-	setHideWindow(cmd)
-	out, err := cmd.Output()
-	if err == nil {
-		name := strings.TrimSpace(string(out))
-		if name != "" {
-			info.HasNvidiaGPU = true
-			info.GPUName = name
-		}
-	}
-
-	// Check if CUDA DLLs or CUDA whisper-cli is installed in binDir
-	cudaDLL := filepath.Join(e.binDir, "ggml-cuda.dll")
-	cublasDLL := filepath.Join(e.binDir, "cublas64_12.dll")
-	if _, err := os.Stat(cudaDLL); err == nil {
-		info.GPUEnabled = true
-	} else if _, err := os.Stat(cublasDLL); err == nil {
-		info.GPUEnabled = true
-	}
-
-	return info
 }
 
-// DownloadGPUAcceleration downloads and extracts whisper-cublas-12.4.0-bin-x64.zip
+// GetHardwareInfo returns complete host GPU, CPU, RAM, and storage architecture details
+func (e *Engine) GetHardwareInfo() study.HardwareInfo {
+	return DetectHardware(e.binDir)
+}
+
+// DownloadGPUAcceleration downloads and extracts optimal acceleration package (CUDA for NVIDIA or OpenBLAS for AMD/Intel)
 func (e *Engine) DownloadGPUAcceleration(onProgress func(study.ModelDownloadProgress)) error {
+	hw := DetectHardware(e.binDir)
 	zipURL := "https://github.com/ggml-org/whisper.cpp/releases/download/b5130/whisper-cublas-12.4.0-bin-x64.zip"
-	tempZip := filepath.Join(e.binDir, "whisper-cublas-12.4.0-bin-x64.zip")
+	packID := "gpu-cuda"
+	if hw.GPUVendor != "nvidia" {
+		zipURL = "https://github.com/ggml-org/whisper.cpp/releases/download/b5130/whisper-blas-bin-x64.zip"
+		packID = "cpu-blas"
+	}
+	tempZip := filepath.Join(e.binDir, "acceleration_pack.zip")
 
 	resp, err := http.Get(zipURL)
 	if err != nil {
-		return fmt.Errorf("download GPU package failed: %w", err)
+		return fmt.Errorf("download acceleration package failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -509,7 +485,7 @@ func (e *Engine) DownloadGPUAcceleration(onProgress func(study.ModelDownloadProg
 					percent = float64(downloaded) / float64(totalSize) * 100
 				}
 				onProgress(study.ModelDownloadProgress{
-					ModelID:          "gpu-cuda",
+					ModelID:          packID,
 					DownloadedBytes:  downloaded,
 					TotalBytes:       totalSize,
 					Percentage:       percent,
@@ -532,16 +508,16 @@ func (e *Engine) DownloadGPUAcceleration(onProgress func(study.ModelDownloadProg
 
 	if onProgress != nil {
 		onProgress(study.ModelDownloadProgress{
-			ModelID:     "gpu-cuda",
-			Percentage:  100,
-			Status:      "verifying",
+			ModelID:    packID,
+			Percentage: 100,
+			Status:     "verifying",
 		})
 	}
 
 	// Extract zip into binDir
 	if err := unzip(tempZip, e.binDir); err != nil {
 		_ = os.Remove(tempZip)
-		return fmt.Errorf("extract GPU package failed: %w", err)
+		return fmt.Errorf("extract acceleration package failed: %w", err)
 	}
 	_ = os.Remove(tempZip)
 
@@ -556,7 +532,7 @@ func (e *Engine) DownloadGPUAcceleration(onProgress func(study.ModelDownloadProg
 
 	if onProgress != nil {
 		onProgress(study.ModelDownloadProgress{
-			ModelID:    "gpu-cuda",
+			ModelID:    packID,
 			Percentage: 100,
 			Status:     "completed",
 		})

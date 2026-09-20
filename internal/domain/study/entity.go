@@ -78,14 +78,21 @@ type LessonProgress struct {
 
 // ModelInfo describes a downloadable speech recognition model
 type ModelInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	SizeMB      int    `json:"sizeMb"`
-	Downloaded  bool   `json:"downloaded"`
-	FilePath    string `json:"filePath,omitempty"`
-	URL         string `json:"url"`
-	Recommended bool   `json:"recommended"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	SizeMB         int    `json:"sizeMb"`
+	Downloaded     bool   `json:"downloaded"`
+	FilePath       string `json:"filePath,omitempty"`
+	URL            string `json:"url"`
+	Recommended    bool   `json:"recommended"`
+	RequiredVRAMMB int    `json:"requiredVramMb"`
+	RequiredRAMMB  int    `json:"requiredRamMb"`
+	Params         string `json:"params"`
+	RelativeSpeed  string `json:"relativeSpeed"`
+	AccuracyLevel  string `json:"accuracyLevel"`
+	HardwareMatch  string `json:"hardwareMatch"` // "perfect", "good", "heavy"
+	HardwareTip    string `json:"hardwareTip"`
 }
 
 // ModelDownloadProgress reports download percentage in real-time
@@ -108,11 +115,26 @@ type TranscribeProgress struct {
 	RecentSentences []string `json:"recentSentences,omitempty"`
 }
 
-// GPUInfo describes the host system's GPU capabilities
+// GPUInfo describes the host system's GPU capabilities (retained for backward compat)
 type GPUInfo struct {
 	HasNvidiaGPU bool   `json:"hasNvidiaGpu"`
 	GPUName      string `json:"gpuName"`
 	GPUEnabled   bool   `json:"gpuEnabled"`
+}
+
+// HardwareInfo provides comprehensive multi-vendor GPU, CPU, RAM, and storage architecture details
+type HardwareInfo struct {
+	GPUVendor           string `json:"gpuVendor"` // "nvidia", "amd", "intel", "unknown"
+	GPUName             string `json:"gpuName"`
+	VRAMMB              int    `json:"vramMb"`
+	CPUCores            int    `json:"cpuCores"`
+	CPUThreads          int    `json:"cpuThreads"`
+	RAMMB               int    `json:"ramMb"`
+	AccelerationType    string `json:"accelerationType"`    // "cuda", "openblas", "cpu_avx"
+	AccelerationEnabled bool   `json:"accelerationEnabled"` // true if CUDA/BLAS dlls installed
+	RecommendedBackend  string `json:"recommendedBackend"`  // "cuda", "openblas", "cpu"
+	IsPortable          bool   `json:"isPortable"`
+	DataDir             string `json:"dataDir"`
 }
 
 

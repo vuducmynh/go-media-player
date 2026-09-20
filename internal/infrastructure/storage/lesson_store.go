@@ -18,13 +18,9 @@ type LessonStore struct {
 	baseDir string
 }
 
-// NewLessonStore creates or initializes the lessons directory
+// NewLessonStore creates or initializes the lessons directory (portable or AppData)
 func NewLessonStore() (*LessonStore, error) {
-	appDataDir, err := os.UserConfigDir()
-	if err != nil {
-		appDataDir = "."
-	}
-	baseDir := filepath.Join(appDataDir, "GoAudioPlay", "lessons")
+	baseDir := filepath.Join(GetDataDir(), "lessons")
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create lessons directory: %w", err)
 	}
@@ -48,17 +44,33 @@ func (ls *LessonStore) sanitizeFingerprint(fingerprint string) string {
 	return clean
 }
 
-// getFilePath returns the absolute path for a lesson JSON file
+// getFilePath returns the primary absolute path for a lesson JSON file
 func (ls *LessonStore) getFilePath(fingerprint string) string {
 	return filepath.Join(ls.baseDir, ls.sanitizeFingerprint(fingerprint)+".json")
 }
 
-// GetLesson retrieves a lesson by its media fingerprint
+// GetLesson retrieves a lesson by its media fingerprint (checking primary and portable locations)
 func (ls *LessonStore) GetLesson(fingerprint string) (*study.Lesson, error) {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
-	filePath := ls.getFilePath(fingerprint)
+	fileName := ls.sanitizeFingerprint(fingerprint) + ".json"
+	filePath := filepath.Join(ls.baseDir, fileName)
+
+	// Fallback check: if not in primary, check appData or exeDir
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		appDataDir, _ := os.UserConfigDir()
+		altCandidate := filepath.Join(appDataDir, "GoAudioPlay", "lessons", fileName)
+		if _, err := os.Stat(altCandidate); err == nil {
+			filePath = altCandidate
+		} else {
+			exeCandidate := filepath.Join(GetExeDir(), "lessons", fileName)
+			if _, err := os.Stat(exeCandidate); err == nil {
+				filePath = exeCandidate
+			}
+		}
+	}
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
