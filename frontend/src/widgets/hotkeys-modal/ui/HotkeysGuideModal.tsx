@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Keyboard, Zap, Repeat, Play, Volume2 } from 'lucide-react';
-import { AppSettings } from '../types';
+import { AppSettings } from '../../../entities/media/types';
 
 interface HotkeysGuideModalProps {
   isOpen: boolean;

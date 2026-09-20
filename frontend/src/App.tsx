@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MediaFile, AppSettings, FilterCategory, ScanProgress } from './types';
-import { WailsBridge } from './services/wailsBridge';
-import { Sidebar } from './components/Sidebar';
-import { PlayerView } from './components/PlayerView';
-import { SettingsModal } from './components/SettingsModal';
-import { HotkeysGuideModal } from './components/HotkeysGuideModal';
-import { AddYouTubeModal } from './features/youtube-loader/ui/AddYouTubeModal';
+import { MediaFile, AppSettings, FilterCategory, ScanProgress } from './entities/media/types';
+import { WailsBridge } from './shared/api/wailsBridge';
+import { Sidebar } from './widgets/sidebar';
+import { PlayerView } from './widgets/player-viewport';
+import { SettingsModal } from './widgets/settings-modal';
+import { HotkeysGuideModal } from './widgets/hotkeys-modal';
+import { AddYouTubeModal } from './features/youtube-loader';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>({
@@ -35,7 +35,7 @@ export const App: React.FC = () => {
     isScanning: false,
   });
 
-  const [activeFilter, setActiveFilter] = useState<FilterCategory>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterCategory>('in_progress');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
@@ -332,19 +332,26 @@ export const App: React.FC = () => {
 
   // Filtered files within active folder / filter for next/previous navigation
   const activeFolderFiles = useMemo(() => {
-    return files.filter((file) => {
+    let list = files.filter((file) => {
       const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
 
-      if (activeFilter === 'youtube') return isYt;
       if (activeFolder === 'YouTube') return isYt;
 
       if (activeFolder && activeFolder !== 'ALL' && file.folderRoot !== activeFolder) {
         return false;
       }
-      if (activeFilter === 'audio' && file.type !== 'audio') return false;
-      if (activeFilter === 'video' && (file.type !== 'video' || isYt)) return false;
-      if (activeFilter === 'in_progress' && (file.completed || file.lastPosition <= 0)) return false;
-      if (activeFilter === 'completed' && !file.completed) return false;
+      if (activeFilter === 'in_progress') {
+        if (file.completed || file.lastPosition <= 0) return false;
+      } else if (activeFilter === 'audio') {
+        if (file.type !== 'audio' || isYt) return false;
+      } else if (activeFilter === 'youtube') {
+        if (!isYt) return false;
+      } else if (activeFilter === 'video') {
+        if (file.type !== 'video' || isYt) return false;
+      } else if (activeFilter === 'completed') {
+        if (!file.completed) return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = file.name.toLowerCase().includes(q);
@@ -353,6 +360,13 @@ export const App: React.FC = () => {
         if (!matchName && !matchTitle && !matchDir) return false;
       }
       return true;
+    });
+
+    // Default newest to oldest
+    return list.sort((a, b) => {
+      const timeA = a.lastPlayedAt ? new Date(a.lastPlayedAt).getTime() : (a.modTime ? new Date(a.modTime).getTime() : 0);
+      const timeB = b.lastPlayedAt ? new Date(b.lastPlayedAt).getTime() : (b.modTime ? new Date(b.modTime).getTime() : 0);
+      return timeB - timeA;
     });
   }, [files, activeFolder, activeFilter, searchQuery]);
 

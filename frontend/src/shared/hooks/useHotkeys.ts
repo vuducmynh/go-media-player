@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { AppSettings } from '../types';
+import { AppSettings } from '../../entities/media/types';
 
-interface HotkeyHandlers {
+export interface HotkeyHandlers {
   togglePlay: () => void;
   seekDelta: (seconds: number) => void;
   adjustSpeed: (delta: number) => void;

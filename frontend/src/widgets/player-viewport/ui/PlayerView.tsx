@@ -24,17 +24,15 @@ import {
   Sparkles,
   Cpu,
 } from 'lucide-react';
-import { MediaFile, AppSettings } from '../types';
-import { formatTime } from '../utils/formatters';
+import { MediaFile, AppSettings } from '../../../entities/media/types';
+import { formatTime } from '../../../shared/lib/formatters';
 import { AudioVisualizer } from './AudioVisualizer';
-import { ListeningControls } from './ListeningControls';
-import { useHotkeys } from '../hooks/useHotkeys';
-import { useYouTubePlayer, getQualityDisplayName } from '../shared/hooks/useYouTubePlayer';
-import { StudyWorkspace } from '../features/study/ui/StudyWorkspace';
-import { ModelManagerModal } from '../features/study/ui/ModelManagerModal';
-import { ProcessingModal } from '../features/study/ui/ProcessingModal';
-import { WailsBridge } from '../shared/api/wailsBridge';
-import { Lesson, DictationAttempt } from '../entities/study/types';
+import { ListeningControls } from '../../../features/playback-controls';
+import { useHotkeys, useYouTubePlayer, getQualityDisplayName } from '../../../shared/hooks';
+import { StudyWorkspace } from '../../../features/study';
+import { ModelManagerModal, ProcessingModal } from '../../../features/model-manager';
+import { WailsBridge } from '../../../shared/api/wailsBridge';
+import { Lesson, DictationAttempt } from '../../../entities/study/types';
 
 interface PlayerViewProps {
   currentFile: MediaFile | null;
@@ -658,7 +656,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       toggleFullscreen,
     },
     settings,
-    Boolean(currentFile)
+    Boolean(currentFile) && !isStudyModeOpen
   );
 
   // Timeline Scrub Hover
@@ -765,12 +763,16 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={handleEnded}
               playsInline
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
             />
           ) : (
             <>
               <audio
                 ref={mediaRef as React.RefObject<HTMLAudioElement>}
                 src={currentFile.streamUrl}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={handleEnded}
@@ -1084,7 +1086,10 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         <div className="absolute inset-0 z-40 bg-fluent-bg-darker flex flex-col animate-fade-in">
           <StudyWorkspace
             lesson={currentLesson}
-            onClose={() => setIsStudyModeOpen(false)}
+            onClose={() => {
+              handleStudyPause();
+              setIsStudyModeOpen(false);
+            }}
             onSaveAttempt={handleSaveAttempt}
             onToggleStar={handleToggleStar}
             onMarkDifficult={handleMarkDifficult}
@@ -1095,6 +1100,12 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             onSetSpeed={handleSpeedChange}
             isPlaying={activeIsPlaying}
             currentTime={activeCurrentTime}
+            currentSpeed={normalSpeed}
+            isSlowHeld={isSlowHeld}
+            onSetSlowActive={setSlowSpeedActive}
+            slowSpeed={settings.slowSpeed || 0.5}
+            holdSlowKey={settings.holdSlowKey || 'KeyS'}
+            jumpSeconds={settings.jumpSeconds || 5}
           />
         </div>
       )}

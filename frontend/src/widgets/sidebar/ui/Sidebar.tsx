@@ -18,9 +18,11 @@ import {
   Trash2,
   Clock,
   Youtube,
+  ArrowUpDown,
+  Check,
 } from 'lucide-react';
-import { MediaFile, FilterCategory, ScanProgress, AppSettings } from '../types';
-import { formatTime, formatFileSize, formatDate } from '../utils/formatters';
+import { MediaFile, FilterCategory, ScanProgress, AppSettings, SortOption } from '../../../entities/media/types';
+import { formatTime, formatFileSize, formatDate } from '../../../shared/lib/formatters';
 
 interface SidebarProps {
   files: MediaFile[];
@@ -70,8 +72,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClearAllProgress,
 }) => {
   const [isFolderPickerExpanded, setIsFolderPickerExpanded] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
 
-  // Calculate YouTube count
+  // Total YouTube files across library
   const youtubeFiles = useMemo(() => {
     return files.filter((f) => f.source === 'youtube' || Boolean(f.youtubeId));
   }, [files]);
@@ -94,35 +98,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   });
 
-  // Filter and sort files by active folder, search, and category filters
+  // Files belonging to the currently active folder scope
+  const filesInActiveFolder = useMemo(() => {
+    return files.filter((file) => {
+      const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
+      if (activeFolder === 'YouTube') return isYt;
+      if (activeFolder && activeFolder !== 'ALL') {
+        return file.folderRoot === activeFolder;
+      }
+      return true;
+    });
+  }, [files, activeFolder]);
+
+  // Tab counts for the current folder scope
+  const inProgressCount = useMemo(
+    () => filesInActiveFolder.filter((f) => !f.completed && f.lastPosition > 0).length,
+    [filesInActiveFolder]
+  );
+  const audioCount = useMemo(
+    () => filesInActiveFolder.filter((f) => f.type === 'audio' && f.source !== 'youtube').length,
+    [filesInActiveFolder]
+  );
+  const youtubeCount = useMemo(
+    () => filesInActiveFolder.filter((f) => f.source === 'youtube' || Boolean(f.youtubeId)).length,
+    [filesInActiveFolder]
+  );
+  const videoCount = useMemo(
+    () => filesInActiveFolder.filter((f) => f.type === 'video' && f.source !== 'youtube').length,
+    [filesInActiveFolder]
+  );
+  const completedCount = useMemo(
+    () => filesInActiveFolder.filter((f) => f.completed).length,
+    [filesInActiveFolder]
+  );
+
+  // Filter and sort files by active folder, search, category filters, and sort option
   const currentFolderFiles = useMemo(() => {
-    let list = files.filter((file) => {
+    let list = filesInActiveFolder.filter((file) => {
       const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
 
-      // If category filter is specifically youtube
-      if (activeFilter === 'youtube') {
-        return isYt;
-      }
-
-      // If activeFolder is 'YouTube'
-      if (activeFolder === 'YouTube') {
-        return isYt;
-      }
-
-      // If an activeFolder is selected (and not ALL), ONLY show files from this folder
-      if (activeFolder && activeFolder !== 'ALL') {
-        if (file.folderRoot !== activeFolder) {
-          return false;
-        }
-      }
-
       // Category filter
-      if (activeFilter === 'audio' && file.type !== 'audio') return false;
-      if (activeFilter === 'video' && (file.type !== 'video' || isYt)) return false;
       if (activeFilter === 'in_progress') {
         if (file.completed || file.lastPosition <= 0) return false;
+      } else if (activeFilter === 'audio') {
+        if (file.type !== 'audio' || isYt) return false;
+      } else if (activeFilter === 'youtube') {
+        if (!isYt) return false;
+      } else if (activeFilter === 'video') {
+        if (file.type !== 'video' || isYt) return false;
+      } else if (activeFilter === 'completed') {
+        if (!file.completed) return false;
       }
-      if (activeFilter === 'completed' && !file.completed) return false;
 
       // Search query
       if (searchQuery.trim()) {
@@ -136,17 +162,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return true;
     });
 
-    // When in "Đang nghe" (in_progress) tab, sort by most recently played first!
-    if (activeFilter === 'in_progress') {
-      list = [...list].sort((a, b) => {
-        const timeA = a.lastPlayedAt ? new Date(a.lastPlayedAt).getTime() : 0;
-        const timeB = b.lastPlayedAt ? new Date(b.lastPlayedAt).getTime() : 0;
+    // Smart sort files
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'newest') {
+        const timeA = a.lastPlayedAt ? new Date(a.lastPlayedAt).getTime() : (a.modTime ? new Date(a.modTime).getTime() : 0);
+        const timeB = b.lastPlayedAt ? new Date(b.lastPlayedAt).getTime() : (b.modTime ? new Date(b.modTime).getTime() : 0);
         return timeB - timeA;
-      });
-    }
+      }
+      if (sortBy === 'oldest') {
+        const timeA = a.modTime ? new Date(a.modTime).getTime() : (a.lastPlayedAt ? new Date(a.lastPlayedAt).getTime() : 0);
+        const timeB = b.modTime ? new Date(b.modTime).getTime() : (b.lastPlayedAt ? new Date(b.lastPlayedAt).getTime() : 0);
+        return timeA - timeB;
+      }
+      if (sortBy === 'name') {
+        const nameA = (a.title || a.name || '').toLowerCase();
+        const nameB = (b.title || b.name || '').toLowerCase();
+        return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+      }
+      if (sortBy === 'duration') {
+        return (b.duration || 0) - (a.duration || 0);
+      }
+      return 0;
+    });
 
     return list;
-  }, [files, activeFolder, activeFilter, searchQuery]);
+  }, [filesInActiveFolder, activeFilter, searchQuery, sortBy]);
 
   const activeFolderStat = folderStats.find((f) => f.path === activeFolder);
   const currentFolderName =
@@ -155,10 +195,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : activeFolder === 'ALL'
       ? 'Tất cả thư mục'
       : activeFolderStat?.name || (activeFolder.split(/[\\/]/).filter(Boolean).pop() || 'Thư mục');
-
-  const totalAudioInActive = currentFolderFiles.filter((f) => f.type === 'audio' && f.source !== 'youtube').length;
-  const totalVideoInActive = currentFolderFiles.filter((f) => f.type === 'video' && f.source !== 'youtube').length;
-  const totalYouTubeInActive = currentFolderFiles.filter((f) => f.source === 'youtube' || Boolean(f.youtubeId)).length;
 
   return (
     <aside className="w-80 sm:w-96 h-full flex flex-col bg-fluent-bg-dark border-r border-white/5 select-none relative z-30">
@@ -389,56 +425,128 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Search Bar & Category Filter Tabs */}
       <div className="p-3 border-b border-white/5 bg-fluent-bg-dark">
-        <div className="relative flex items-center mb-2">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 text-fluent-text-muted pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={`Tìm kiếm media...`}
-            className="w-full pl-8 pr-7 py-1.5 bg-fluent-bg-card border border-white/5 rounded-lg text-xs text-white placeholder-fluent-text-muted focus:outline-none focus:border-fluent-accent transition-colors"
-          />
-          {searchQuery && (
+        {/* Search bar & Sort selector */}
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="relative flex-1 flex items-center">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 text-fluent-text-muted pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={`Tìm kiếm media...`}
+              className="w-full pl-8 pr-7 py-1.5 bg-fluent-bg-card border border-white/5 rounded-lg text-xs text-white placeholder-fluent-text-muted focus:outline-none focus:border-fluent-accent transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="absolute right-2 text-fluent-text-muted hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Sort dropdown */}
+          <div className="relative">
             <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-2 text-fluent-text-muted hover:text-white"
+              onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+              title="Tùy chọn sắp xếp"
+              className="flex items-center gap-1 px-2 py-1.5 bg-fluent-bg-card hover:bg-white/10 border border-white/5 rounded-lg text-xs text-fluent-text-secondary hover:text-white transition-colors"
             >
-              <X className="w-3.5 h-3.5" />
+              <ArrowUpDown className="w-3.5 h-3.5 text-fluent-accent" />
+              <span className="text-[11px] font-medium hidden sm:inline">
+                {sortBy === 'newest' && 'Mới nhất'}
+                {sortBy === 'oldest' && 'Cũ nhất'}
+                {sortBy === 'name' && 'Tên A-Z'}
+                {sortBy === 'duration' && 'Thời lượng'}
+              </span>
             </button>
-          )}
+
+            {isSortMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsSortMenuOpen(false)}
+                />
+                <div className="absolute right-0 mt-1 w-36 py-1 bg-fluent-bg-card border border-white/10 rounded-lg shadow-xl z-50 text-xs">
+                  <div className="px-2.5 py-1 text-[10px] uppercase font-semibold text-fluent-text-muted tracking-wider border-b border-white/5">
+                    Sắp xếp theo
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSortBy('newest');
+                      setIsSortMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 hover:bg-white/10 flex items-center justify-between ${
+                      sortBy === 'newest' ? 'text-fluent-accent font-semibold' : 'text-fluent-text-secondary'
+                    }`}
+                  >
+                    <span>Mới nhất</span>
+                    {sortBy === 'newest' && <Check className="w-3 h-3" />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortBy('oldest');
+                      setIsSortMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 hover:bg-white/10 flex items-center justify-between ${
+                      sortBy === 'oldest' ? 'text-fluent-accent font-semibold' : 'text-fluent-text-secondary'
+                    }`}
+                  >
+                    <span>Cũ nhất</span>
+                    {sortBy === 'oldest' && <Check className="w-3 h-3" />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortBy('name');
+                      setIsSortMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 hover:bg-white/10 flex items-center justify-between ${
+                      sortBy === 'name' ? 'text-fluent-accent font-semibold' : 'text-fluent-text-secondary'
+                    }`}
+                  >
+                    <span>Tên A-Z</span>
+                    {sortBy === 'name' && <Check className="w-3 h-3" />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortBy('duration');
+                      setIsSortMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 hover:bg-white/10 flex items-center justify-between ${
+                      sortBy === 'duration' ? 'text-fluent-accent font-semibold' : 'text-fluent-text-secondary'
+                    }`}
+                  >
+                    <span>Thời lượng</span>
+                    {sortBy === 'duration' && <Check className="w-3 h-3" />}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Category Filters */}
+        {/* Category Filters in strict order: Đang nghe -> Audio -> YouTube -> Video -> Đã xong */}
         <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-thin">
           <button
-            onClick={() => onFilterChange('all')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors ${
-              activeFilter === 'all'
-                ? 'bg-white/20 text-white font-semibold'
+            onClick={() => onFilterChange('in_progress')}
+            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
+              activeFilter === 'in_progress'
+                ? 'bg-amber-500/25 text-amber-300 font-semibold border border-amber-500/40 shadow-sm'
                 : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
             }`}
           >
-            Tất cả ({currentFolderFiles.length})
+            <Clock className="w-3 h-3 text-amber-400" /> Đang nghe ({inProgressCount})
           </button>
           <button
             onClick={() => onFilterChange('audio')}
             className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
               activeFilter === 'audio'
-                ? 'bg-fluent-accent text-black font-bold'
+                ? 'bg-fluent-accent text-black font-bold shadow-sm'
                 : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
             }`}
           >
-            <Music className="w-3 h-3" /> Audio ({totalAudioInActive})
-          </button>
-          <button
-            onClick={() => onFilterChange('video')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-              activeFilter === 'video'
-                ? 'bg-purple-500 text-white font-bold'
-                : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Film className="w-3 h-3" /> Video ({totalVideoInActive})
+            <Music className="w-3 h-3" /> Audio ({audioCount})
           </button>
           <button
             onClick={() => onFilterChange('youtube')}
@@ -448,27 +556,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
             }`}
           >
-            <Youtube className="w-3 h-3 text-red-400" /> YouTube ({youtubeFiles.length})
+            <Youtube className="w-3 h-3 text-red-400" /> YouTube ({youtubeCount})
           </button>
           <button
-            onClick={() => onFilterChange('in_progress')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors ${
-              activeFilter === 'in_progress'
-                ? 'bg-amber-500/30 text-amber-300 font-semibold border border-amber-500/50 shadow-sm'
+            onClick={() => onFilterChange('video')}
+            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
+              activeFilter === 'video'
+                ? 'bg-purple-600 text-white font-bold shadow-sm'
                 : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
             }`}
           >
-            Đang nghe
+            <Film className="w-3 h-3" /> Video ({videoCount})
           </button>
           <button
             onClick={() => onFilterChange('completed')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors ${
+            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
               activeFilter === 'completed'
-                ? 'bg-emerald-500/30 text-emerald-300 font-semibold border border-emerald-500/50'
+                ? 'bg-emerald-500/25 text-emerald-300 font-semibold border border-emerald-500/40 shadow-sm'
                 : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
             }`}
           >
-            Đã xong
+            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Đã xong ({completedCount})
           </button>
         </div>
       </div>

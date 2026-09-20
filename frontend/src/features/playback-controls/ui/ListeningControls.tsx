@@ -4,15 +4,13 @@ import {
   RotateCw,
   Gauge,
   Repeat,
-  Sparkles,
   Zap,
   Bookmark,
   X,
-  Play,
 } from 'lucide-react';
-import { formatTime } from '../utils/formatters';
+import { formatTime } from '../../../shared/lib/formatters';
 
-interface ListeningControlsProps {
+export interface ListeningControlsProps {
   jumpSeconds: number;
   playbackRate: number;
   isSlowHeld: boolean;
@@ -43,15 +41,12 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
   loopA,
   loopB,
   isLoopActive,
-  currentTime,
-  duration,
   onSeekDelta,
   onSpeedChange,
   onSetLoopA,
   onSetLoopB,
   onToggleLoop,
   onClearLoop,
-  onSeekTo,
 }) => {
   const hasLoop = loopA > 0 || loopB > 0;
   const holdKeyName =

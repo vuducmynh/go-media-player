@@ -30,4 +30,7 @@ Thumbs.db
 *.out
 *.test
 *.tmp
+*.zip
+*.log
+app_log.txt
 storage.json

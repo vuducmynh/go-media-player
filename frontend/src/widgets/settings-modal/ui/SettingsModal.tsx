@@ -12,7 +12,7 @@ import {
   BookmarkCheck,
   HelpCircle,
 } from 'lucide-react';
-import { AppSettings } from '../types';
+import { AppSettings } from '../../../entities/media/types';
 
 interface SettingsModalProps {
   isOpen: boolean;

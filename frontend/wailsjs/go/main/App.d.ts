@@ -54,6 +54,8 @@ export function RemoveYouTubeVideo(arg1:string):Promise<void>;
 
 export function SaveDictationAttempt(arg1:string,arg2:string,arg3:study.DictationAttempt):Promise<study.Lesson>;
 
+export function SaveLesson(arg1:study.Lesson):Promise<void>;
+
 export function SavePlaybackProgress(arg1:string,arg2:string,arg3:number,arg4:number,arg5:number,arg6:number):Promise<void>;
 
 export function SaveSettings(arg1:library.AppSettings):Promise<void>;

@@ -41,6 +41,11 @@ func (s *StudyService) GetLesson(fingerprint string) (*study.Lesson, error) {
 	return s.lessonStore.GetLesson(fingerprint)
 }
 
+// SaveLesson persists or updates a full lesson
+func (s *StudyService) SaveLesson(lesson *study.Lesson) error {
+	return s.lessonStore.SaveLesson(lesson)
+}
+
 // GetInstalledModels returns the list of Whisper models with download status
 func (s *StudyService) GetInstalledModels() []study.ModelInfo {
 	return s.modelManager.GetModels()

@@ -231,6 +231,14 @@ func (a *App) GetLesson(fingerprint string) (*study.Lesson, error) {
 	return a.studySvc.GetLesson(fingerprint)
 }
 
+// SaveLesson persists or updates a study lesson (e.g. from imported script)
+func (a *App) SaveLesson(lesson study.Lesson) error {
+	if a.studySvc == nil {
+		return fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.SaveLesson(&lesson)
+}
+
 // GetInstalledModels returns the list of downloadable speech recognition models
 func (a *App) GetInstalledModels() []study.ModelInfo {
 	if a.studySvc == nil {

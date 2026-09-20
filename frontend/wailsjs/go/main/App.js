@@ -102,6 +102,10 @@ export function SaveDictationAttempt(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveDictationAttempt'](arg1, arg2, arg3);
 }
 
+export function SaveLesson(arg1) {
+  return window['go']['main']['App']['SaveLesson'](arg1);
+}
+
 export function SavePlaybackProgress(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SavePlaybackProgress'](arg1, arg2, arg3, arg4, arg5, arg6);
 }

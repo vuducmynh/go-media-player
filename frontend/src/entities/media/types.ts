@@ -72,4 +72,5 @@ export interface ScanProgress {
   isScanning: boolean;
 }
 
-export type FilterCategory = 'all' | 'audio' | 'video' | 'in_progress' | 'completed' | 'youtube';
+export type FilterCategory = 'in_progress' | 'audio' | 'youtube' | 'video' | 'completed' | 'all';
+export type SortOption = 'newest' | 'oldest' | 'name' | 'duration';

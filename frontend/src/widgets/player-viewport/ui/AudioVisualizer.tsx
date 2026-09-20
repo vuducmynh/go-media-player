@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Music, Disc } from 'lucide-react';
-import { MediaFile } from '../types';
+import { MediaFile } from '../../../entities/media/types';
 
 interface AudioVisualizerProps {
   currentFile: MediaFile;
