@@ -16,9 +16,64 @@ import {
   Gauge,
   Layers,
   Loader2,
+  Info,
 } from 'lucide-react';
 import { ModelInfo, ModelDownloadProgress, HardwareInfo } from '../../../entities/study/types';
 import { WailsBridge } from '../../../shared/api/wailsBridge';
+
+export const getModelTechnicalDetails = (modelId: string) => {
+  switch (modelId) {
+    case 'tiny':
+      return {
+        techName: 'ggml-tiny.bin',
+        arch: 'Whisper Tiny (4 encoder + 4 decoder layers)',
+        level: 1,
+        powerBadge: 'Cấp 1/6 • Siêu nhẹ',
+      };
+    case 'base':
+      return {
+        techName: 'ggml-base.bin',
+        arch: 'Whisper Base (6 encoder + 6 decoder layers)',
+        level: 2,
+        powerBadge: 'Cấp 2/6 • Cơ bản',
+      };
+    case 'small':
+      return {
+        techName: 'ggml-small.bin',
+        arch: 'Whisper Small (12 encoder + 12 decoder layers)',
+        level: 3,
+        powerBadge: 'Cấp 3/6 • Tiêu chuẩn',
+      };
+    case 'medium':
+      return {
+        techName: 'ggml-medium.bin',
+        arch: 'Whisper Medium (24 encoder + 24 decoder layers)',
+        level: 4,
+        powerBadge: 'Cấp 4/6 • Nâng cao',
+      };
+    case 'large-v3-turbo-q5_0':
+      return {
+        techName: 'ggml-large-v3-turbo-q5_0.bin',
+        arch: 'Whisper Large-v3 Turbo (32 encoder + 4 decoder layers • Quant Q5_0)',
+        level: 5,
+        powerBadge: 'Cấp 5/6 • Cao cấp',
+      };
+    case 'large-v3-q5_0':
+      return {
+        techName: 'ggml-large-v3-q5_0.bin',
+        arch: 'Whisper Large-v3 (32 encoder + 32 decoder layers • Quant Q5_0)',
+        level: 6,
+        powerBadge: 'Cấp 6/6 • Tối đa',
+      };
+    default:
+      return {
+        techName: `ggml-${modelId}.bin`,
+        arch: 'Mô hình tùy chỉnh (Custom GGML)',
+        level: 3,
+        powerBadge: 'Tùy chỉnh',
+      };
+  }
+};
 
 // Module-level cache so reopening modal is instantaneous (0ms)
 let cachedModels: ModelInfo[] | null = null;
@@ -402,6 +457,7 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
                 {models.map((mod) => {
                   const isSelected = selectedModelId === mod.id;
                   const isDownloading = activeDownload?.modelId === mod.id;
+                  const tech = getModelTechnicalDetails(mod.id);
 
                   return (
                     <div
@@ -418,15 +474,30 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-bold text-white">{mod.name}</span>
 
+                            {/* Power Level Badge */}
+                            <span className="px-2 py-0.5 rounded-full bg-white/10 text-fluent-text-secondary text-[9px] font-mono font-medium flex items-center gap-1">
+                              <span>⚡</span>
+                              <span>{tech.powerBadge}</span>
+                            </span>
+
+                            {/* Technical Name Info Icon with Tooltip */}
+                            <div
+                              title={`Tên file kỹ thuật: ${tech.techName}\nKiến trúc: ${tech.arch}`}
+                              className="p-0.5 rounded-md hover:bg-white/10 text-fluent-text-muted hover:text-fluent-accent transition-colors cursor-help"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Info className="w-3.5 h-3.5 text-fluent-accent" />
+                            </div>
+
                             {mod.hardwareMatch === 'perfect' && (
                               <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-semibold border border-emerald-500/30 flex items-center gap-1">
-                                <Sparkles className="w-2.5 h-2.5" /> Đề Xuất Cho Máy Bạn
+                                <Sparkles className="w-2.5 h-2.5" /> Khuyên dùng cho máy bạn
                               </span>
                             )}
 
                             {mod.downloaded && (
                               <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[9px] font-semibold border border-blue-500/30 flex items-center gap-1">
-                                <Check className="w-2.5 h-2.5" /> Đã Tải Sẵn
+                                <Check className="w-2.5 h-2.5" /> Đã tải sẵn
                               </span>
                             )}
 

@@ -473,6 +473,15 @@ export const App: React.FC = () => {
     await WailsBridge.saveSettings(newSettings);
   };
 
+  const handleResetToHome = () => {
+    setCurrentFile(null);
+    try {
+      localStorage.removeItem('last_playing_fingerprint');
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-fluent-bg-darker text-fluent-text-primary">
       {/* Sidebar with isolated Folder Switcher & YouTube Hub */}
@@ -501,6 +510,7 @@ export const App: React.FC = () => {
         onClearFileProgress={handleClearFileProgress}
         onClearAllProgress={handleClearAllProgress}
         updater={updater}
+        onResetToHome={handleResetToHome}
       />
 
       {/* Main Player View (with connected hotkeys & YouTube deep listening controls) */}

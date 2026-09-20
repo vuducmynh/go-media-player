@@ -978,7 +978,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         {/* Controls Layout */}
         <div className="flex items-center justify-between gap-4">
           {/* Left: Track Info & Path */}
-          <div className="flex items-center gap-3 min-w-[200px] max-w-sm truncate">
+          <div className="flex items-center gap-3 min-w-[200px] max-w-sm">
             <div className="p-2 rounded-xl bg-fluent-bg-card border border-white/5 flex items-center justify-center shrink-0">
               {isYouTube ? (
                 <Youtube className="w-5 h-5 text-red-500" />
@@ -988,9 +988,9 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                 <Music className="w-5 h-5 text-fluent-accent" />
               )}
             </div>
-            <div className="truncate">
-              <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-sm text-white truncate">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-semibold text-sm text-white truncate max-w-[240px]" title={currentFile.title || currentFile.name}>
                   {currentFile.title || currentFile.name}
                 </span>
                 {currentFile.completed && (
@@ -1000,7 +1000,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                 )}
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-[11px] text-fluent-text-secondary truncate">
+                <p className="text-[11px] text-fluent-text-secondary truncate max-w-[140px]">
                   {isYouTube ? (currentFile.relativeDir || 'YouTube') : currentFile.name}
                 </p>
                 {isYouTube && (
@@ -1025,8 +1025,8 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
                     {/* Quality Popup Menu */}
                     {isQualityMenuOpen && (
-                      <div className="absolute bottom-full mb-2 left-0 w-48 bg-fluent-bg-darker border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in text-xs">
-                        <div className="px-2 py-1 text-[9px] font-semibold text-fluent-text-muted uppercase tracking-wider border-b border-white/5 mb-1 flex items-center justify-between">
+                      <div className="absolute bottom-full mb-2.5 left-0 w-48 bg-[#16181f] border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in text-xs">
+                        <div className="px-2 py-1 text-[9px] font-semibold text-fluent-text-muted uppercase tracking-wider border-b border-white/10 mb-1 flex items-center justify-between">
                           <span>Độ phân giải</span>
                           <span className="text-red-400 font-normal">Tự động tối ưu</span>
                         </div>

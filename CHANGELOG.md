@@ -4,6 +4,24 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.4] - 21/09/2026
+
+# Tùy biến thanh bên, Logo trang chủ & Tối ưu hiển thị tệp tin cùng thang đo mô hình AI
+
+Bản cập nhật v1.3.4 mang lại khả năng tùy chỉnh linh hoạt cho thanh bên (Sidebar Resizing), cho phép nhấp vào Logo ứng dụng để về màn hình chào ban đầu, tối ưu hóa không gian hiển thị danh sách phát với thời lượng nổi trên thumbnail, khắc phục triệt để lỗi hai thùng rác trùng lặp, chuẩn hóa thang cấp độ mô hình AI Whisper (Cấp 1 - 6 kèm chú thích kỹ thuật) và sửa lỗi menu chọn độ phân giải YouTube bị cắt khuất.
+
+### Cải tiến (5)
+- **Thanh bên tùy chỉnh kích thước (Resizable Sidebar)**: Hỗ trợ rê chuột kéo mép phải Sidebar để co giãn linh hoạt từ 280px đến 600px theo ý thích, tự động ghi nhớ kích thước đã chọn cho các lần mở sau.
+- **Biểu tượng Logo trở về Trang chủ**: Nhấp vào Logo "Go Audio Player" ở thanh bên để đóng tệp đang mở và quay lại màn hình chờ ban đầu.
+- **Tái cấu trúc bố cục danh sách tệp tin**: Thời lượng phát được chuyển xuống dạng huy hiệu trên ảnh thu nhỏ (video/YouTube) hoặc dòng thông tin bên dưới (audio), giải phóng 100% chiều ngang cho tiêu đề tệp hiển thị rộng rãi, thoáng đãng.
+- **Phân biệt trực quan nút "Nghe lại từ đầu" và "Xóa"**: Thay thế icon thùng rác thứ hai gây hiểu nhầm bằng biểu tượng xoay `RotateCcw` màu hổ phách giúp reset tiến trình nghe dở về 0:00 nhanh chóng và tường minh.
+- **Thang cấp độ mô hình AI Whisper (Cấp độ 1 - 6)**: Đặt tên mô hình AI theo cấp độ trực quan tăng dần cho người dùng phổ thông, bổ sung nút thông tin `(i)` hiển thị chính xác tên tệp ggml và thông số kiến trúc mô hình.
+
+### Sửa lỗi (1)
+- **Khắc phục menu chọn chất lượng YouTube bị che khuất**: Sửa thuộc tính cắt tràn vùng chứa cha trên thanh phát nhạc, giúp cửa sổ bật lên (popover) chọn độ phân giải 1080P/720P/480P hiển thị trọn vẹn.
+
+---
+
 ## [v1.3.3] - 21/09/2026
 
 # Bố cục Sidebar 2 hàng & Tinh chỉnh ngôn ngữ người dùng tự nhiên

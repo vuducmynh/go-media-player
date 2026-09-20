@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   FolderPlus,
   RefreshCw,
@@ -21,6 +21,7 @@ import {
   ArrowUpDown,
   Check,
   Pencil,
+  RotateCcw,
 } from 'lucide-react';
 import { MediaFile, FilterCategory, ScanProgress, AppSettings, SortOption } from '../../../entities/media/types';
 import { formatTime, formatFileSize, formatDate } from '../../../shared/lib/formatters';
@@ -52,6 +53,7 @@ interface SidebarProps {
   onClearAllProgress?: () => void;
   updater?: ReturnType<typeof useUpdater>;
   lessonFingerprints?: Set<string>;
+  onResetToHome?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -79,10 +81,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClearFileProgress,
   onClearAllProgress,
   updater,
+  onResetToHome,
 }) => {
   const [isFolderPickerExpanded, setIsFolderPickerExpanded] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+
+  // Resizable sidebar width (min 280px, max 600px) with localStorage persistence
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('sidebar_width');
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= 280 && parsed <= 600) {
+        return parsed;
+      }
+    }
+    return 340;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback(
+    (e: MouseEvent) => {
+      if (isResizing) {
+        const newWidth = Math.max(280, Math.min(600, e.clientX));
+        setSidebarWidth(newWidth);
+        localStorage.setItem('sidebar_width', String(newWidth));
+      }
+    },
+    [isResizing]
+  );
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    } else {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, resize, stopResizing]);
 
   // Inline rename state
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
@@ -263,11 +317,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : activeFolderStat?.name || (activeFolder.split(/[\\/]/).filter(Boolean).pop() || 'Thư mục');
 
   return (
-    <aside className="w-80 sm:w-96 h-full flex flex-col bg-fluent-bg-dark border-r border-white/5 select-none relative z-30">
-      {/* App Header with Brand Logo */}
+    <aside
+      style={{ width: `${sidebarWidth}px` }}
+      className="shrink-0 h-full flex flex-col bg-fluent-bg-dark border-r border-white/5 select-none relative z-30"
+    >
+      {/* Resizer Handle */}
+      <div
+        onMouseDown={startResizing}
+        className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-fluent-accent/50 transition-colors z-40 group ${
+          isResizing ? 'bg-fluent-accent' : 'bg-transparent'
+        }`}
+        title="Kéo để thay đổi độ rộng thanh bên"
+      >
+        <div className="absolute top-1/2 right-0.5 -translate-y-1/2 w-0.5 h-8 bg-white/20 rounded-full group-hover:bg-fluent-accent transition-colors" />
+      </div>
+
+      {/* App Header with Brand Logo (Clickable to return to Home/Welcome state) */}
       <div className="p-3 border-b border-white/5 flex items-center justify-between bg-fluent-bg-subtle/70">
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-8 h-8 rounded-xl overflow-hidden shadow-accent-glow border border-white/15 shrink-0">
+        <button
+          type="button"
+          onClick={onResetToHome}
+          title="Về trang chủ (Đóng tệp đang mở)"
+          className="flex items-center gap-2.5 hover:opacity-85 transition-opacity text-left group focus:outline-none"
+        >
+          <div className="relative w-8 h-8 rounded-xl overflow-hidden shadow-accent-glow border border-white/15 shrink-0 group-hover:scale-105 transition-transform">
             <img
               src="/logo.png"
               alt="Logo"
@@ -279,7 +352,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h1 className="font-bold text-xs text-white tracking-wide leading-none">
+              <h1 className="font-bold text-xs text-white tracking-wide leading-none group-hover:text-fluent-accent transition-colors">
                 Go Audio Player
               </h1>
               <span className="px-1.5 py-0.2 rounded-full bg-fluent-accent/15 text-fluent-accent text-[9px] font-semibold">
@@ -288,7 +361,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <span className="text-[10px] text-fluent-text-muted">Listening Master</span>
           </div>
-        </div>
+        </button>
 
         {/* Header Action Buttons */}
         <div className="flex items-center gap-1">
@@ -729,15 +802,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 {/* Thumbnail / Type Icon */}
                 {isYt && file.thumbnail ? (
-                  <div className="relative w-12 h-8 rounded-lg overflow-hidden bg-black shrink-0 border border-white/10 mt-0.5">
+                  <div className="relative w-14 h-9 rounded-lg overflow-hidden bg-black shrink-0 border border-white/10 mt-0.5">
                     <img
                       src={file.thumbnail}
                       alt="Thumbnail"
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                      <Play className="w-3 h-3 text-white fill-white" />
+                      <Play className="w-3.5 h-3.5 text-white fill-white" />
                     </div>
+                    {file.duration > 0 && (
+                      <span className="absolute bottom-0.5 right-0.5 px-1 py-0.2 bg-black/80 rounded text-[9px] font-mono text-white/90 leading-tight">
+                        {formatTime(file.duration)}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div
@@ -837,7 +915,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {file.title || file.name}
                       </p>
 
-                      {/* Right action group: Rename button, Clear button and status/duration */}
+                      {/* Right action group: Rename button, Clear progress button (RotateCcw), Remove video button (Trash2), and Completed badge */}
                       <div className="flex items-center gap-0.5 shrink-0">
                         {/* Rename button (hover or click) */}
                         {onRenameFile && (
@@ -851,22 +929,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           </button>
                         )}
 
-                        {/* Delete YouTube item button */}
-                        {isYt && onRemoveYouTubeVideo && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRemoveYouTubeVideo(file.youtubeId || file.id);
-                            }}
-                            title="Xóa khỏi danh sách"
-                            className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-
-                        {/* Clear progress button for individual file */}
+                        {/* Reset progress button: distinct RotateCcw icon */}
                         {file.lastPosition > 0 && onClearFileProgress && (
                           <button
                             type="button"
@@ -874,23 +937,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               e.stopPropagation();
                               onClearFileProgress(file.fingerprint);
                             }}
-                            title="Xóa khỏi danh sách nghe tiếp"
+                            title="Nghe lại từ đầu (Xóa tiến trình dở dang)"
+                            className="p-1 rounded hover:bg-amber-500/20 text-fluent-text-muted hover:text-amber-400 transition-colors opacity-70 group-hover:opacity-100"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        {/* Delete YouTube item button: distinct Trash2 icon */}
+                        {isYt && onRemoveYouTubeVideo && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveYouTubeVideo(file.youtubeId || file.id);
+                            }}
+                            title="Xóa video khỏi danh sách"
                             className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
                         )}
 
-                        {file.completed ? (
+                        {file.completed && (
                           <span title="Đã hoàn thành">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                           </span>
-                        ) : (
-                          file.duration > 0 && (
-                            <span className="text-[10px] text-fluent-text-muted font-mono shrink-0 ml-1">
-                              {formatTime(file.duration)}
-                            </span>
-                          )
                         )}
                       </div>
                     </div>
@@ -927,7 +999,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
                   </div>
 
-                  {/* Progress Bar & Saved Info */}
+                  {/* Progress Bar & Saved Info (with duration for non-thumbnail media) */}
                   <div className="flex items-center justify-between gap-2 mt-1.5">
                     <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
                       <div
@@ -941,9 +1013,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
-                    <span className="text-[9px] text-fluent-text-muted font-mono shrink-0">
-                      {isYt ? 'YouTube' : formatFileSize(file.size)}
-                    </span>
+                    <div className="flex items-center gap-1.5 text-[9px] text-fluent-text-muted font-mono shrink-0">
+                      {(!isYt || !file.thumbnail) && file.duration > 0 && (
+                        <span className="text-fluent-text-secondary font-medium">
+                          {formatTime(file.duration)}
+                        </span>
+                      )}
+                      <span>{isYt ? 'YouTube' : formatFileSize(file.size)}</span>
+                    </div>
                   </div>
                 </div>
               </div>

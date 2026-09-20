@@ -17,8 +17,8 @@ import (
 var defaultModels = []study.ModelInfo{
 	{
 		ID:             "tiny",
-		Name:           "1. Whisper Tiny (Siêu tốc • Nhẹ nhất)",
-		Description:    "Mô hình nhỏ nhất (~75MB). Tốc độ giải mã nhanh nhất (~32x), phù hợp nghe lướt nhanh bài nghe hoặc máy rất yếu.",
+		Name:           "Cấp độ 1: Siêu tốc (Mọi máy • Nhẹ nhất)",
+		Description:    "Mô hình nhỏ gọn nhất (~75MB). Tốc độ giải mã cực nhanh (~32x), phù hợp nghe lướt hoặc máy tính cấu hình khiêm tốn.",
 		SizeMB:         75,
 		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
 		Recommended:    false,
@@ -30,8 +30,8 @@ var defaultModels = []study.ModelInfo{
 	},
 	{
 		ID:             "base",
-		Name:           "2. Whisper Base (Siêu nhẹ & Nhanh)",
-		Description:    "Tốc độ xử lý chớp nhoáng (~16x), dung lượng nhỏ gọn (~142MB), chạy nhẹ nhàng trên mọi máy tính và laptop văn phòng.",
+		Name:           "Cấp độ 2: Cơ bản (Nhanh & Tiết kiệm)",
+		Description:    "Tốc độ xử lý chớp nhoáng (~16x), dung lượng nhỏ (~142MB), chạy nhẹ nhàng trên mọi laptop và PC văn phòng.",
 		SizeMB:         142,
 		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
 		Recommended:    false,
@@ -43,7 +43,7 @@ var defaultModels = []study.ModelInfo{
 	},
 	{
 		ID:             "small",
-		Name:           "3. Whisper Small (Cân bằng tốt)",
+		Name:           "Cấp độ 3: Tiêu chuẩn (Cân bằng tốt)",
 		Description:    "Cân bằng xuất sắc giữa thời gian giải mã (~6x) và độ chính xác bắt chữ tiếng Anh thông dụng (~466MB).",
 		SizeMB:         466,
 		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
@@ -56,7 +56,7 @@ var defaultModels = []study.ModelInfo{
 	},
 	{
 		ID:             "medium",
-		Name:           "4. Whisper Medium (Chuyên sâu)",
+		Name:           "Cấp độ 4: Nâng cao (Từ vựng chuyên sâu)",
 		Description:    "Khả năng bắt từ vựng chuyên ngành tốt (~1.5GB). Đòi hỏi cấu hình máy tính tầm trung trở lên.",
 		SizeMB:         1530,
 		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
@@ -69,8 +69,8 @@ var defaultModels = []study.ModelInfo{
 	},
 	{
 		ID:             "large-v3-turbo-q5_0",
-		Name:           "5. Whisper Large-v3 Turbo Q5 (Khuyên dùng)",
-		Description:    "Kiến trúc 4 lớp giải mã tối ưu hóa đỉnh cao. Tốc độ siêu nhanh (~8x), độ chính xác 99% bắt trọn nối âm, ngữ điệu IELTS.",
+		Name:           "Cấp độ 5: Cao cấp Turbo (Khuyên dùng)",
+		Description:    "Kiến trúc 4 tầng giải mã tối ưu hóa đỉnh cao. Tốc độ siêu nhanh (~8x), độ chính xác 99% bắt trọn nối âm, ngữ điệu IELTS.",
 		SizeMB:         547,
 		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
 		Recommended:    true,
@@ -82,8 +82,8 @@ var defaultModels = []study.ModelInfo{
 	},
 	{
 		ID:             "large-v3-q5_0",
-		Name:           "6. Whisper Large-v3 Q5 (Chất lượng cao nhất)",
-		Description:    "Mô hình sâu nhất 32 tầng Transformer (~1.1GB). Độ chính xác tối đa 99.6% cho mọi accent khó, lẫn tạp âm. Cần GPU rời khỏe (RTX 3050 6GB).",
+		Name:           "Cấp độ 6: Tối đa (Chuẩn xác cao nhất)",
+		Description:    "Mô hình sâu nhất 32 tầng Transformer (~1.1GB). Độ chính xác tối đa 99.6% cho mọi accent khó, lẫn tạp âm. Cần GPU rời khỏe (RTX 3050 6GB trở lên).",
 		SizeMB:         1080,
 		URL:            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin",
 		Recommended:    false,
