@@ -248,17 +248,18 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
                 <div className="truncate">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold text-white">
-                      {hardwareInfo.gpuName || 'CPU System'}
+                      {hardwareInfo.gpuName || 'Đồ họa hệ thống'}
                     </span>
                     <span className="text-[10px] text-fluent-text-muted font-mono">
-                      ({hardwareInfo.cpuThreads} luồng CPU
-                      {hardwareInfo.vramMb > 0 ? ` • ${Math.round(hardwareInfo.vramMb / 1024)}GB VRAM` : ''})
+                      ({hardwareInfo.vramGb ? `${hardwareInfo.vramGb}GB VRAM` : hardwareInfo.vramMb > 0 ? `${Math.round(hardwareInfo.vramMb / 1024)}GB VRAM` : 'iGPU'}
+                      {hardwareInfo.cpuThreads ? ` • ${hardwareInfo.cpuThreads} luồng CPU` : ''}
+                      {hardwareInfo.ramGb ? ` • ${hardwareInfo.ramGb}GB RAM` : ''})
                     </span>
                     {hardwareInfo.accelerationEnabled ? (
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/40 flex items-center gap-1">
                         <CheckCircle2 className="w-2.5 h-2.5" />
                         {hardwareInfo.accelerationType === 'cuda'
-                          ? 'CUDA GPU Đã Kích Hoạt (-ngl 99)'
+                          ? 'CUDA GPU Đã Sẵn Sàng'
                           : 'OpenBLAS Đa Nhân Đã Kích Hoạt'}
                       </span>
                     ) : (
@@ -267,13 +268,13 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-fluent-text-muted mt-0.5 truncate">
+                  <p className="text-[10px] text-fluent-text-muted mt-1 truncate">
                     {hardwareInfo.accelerationEnabled
                       ? isNvidia
-                        ? 'Toàn bộ 32 lớp transformer được nạp vào VRAM của card đồ họa NVIDIA để phân đoạn siêu tốc.'
+                        ? `Toàn bộ mô hình được xử lý bằng nhân CUDA trên card ${hardwareInfo.gpuName} (${hardwareInfo.vramGb || 6}GB VRAM) với Flash Attention.`
                         : 'Các phép tính ma trận được tối ưu đa luồng bằng OpenBLAS trên các nhân CPU / iGPU.'
                       : isNvidia
-                      ? 'Phát hiện card đồ họa NVIDIA. Kích hoạt CUDA để tăng tốc nhận diện gấp 10x-20x.'
+                      ? `Phát hiện card đồ họa ${hardwareInfo.gpuName} (${hardwareInfo.vramGb || 6}GB VRAM). Kích hoạt CUDA để tăng tốc độ nhận diện gấp 10x-20x.`
                       : isAMD || isIntel
                       ? 'Phát hiện phần cứng AMD/Intel. Kích hoạt OpenBLAS để tối ưu hóa hiệu suất đa nhân.'
                       : 'Kích hoạt gói tăng tốc để tối ưu hóa hiệu suất máy tính của bạn.'}

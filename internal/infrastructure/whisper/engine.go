@@ -218,9 +218,9 @@ func (e *Engine) Transcribe(
 		"-fa",
 	}
 
-	if useGPU {
-		// Offload all 99 layers into GPU VRAM for maximum GPU acceleration
-		args = append(args, "-ngl", "99")
+	if !useGPU {
+		// Disable GPU explicitly only if system has no GPU acceleration
+		args = append(args, "-ng")
 	}
 
 	cmd := exec.CommandContext(ctx, e.cliPath, args...)
@@ -242,6 +242,7 @@ func (e *Engine) Transcribe(
 		recentSentences []string
 		latestSentence  string
 		currentRawProg  int
+		recentLogs      []string
 	)
 
 	// Custom split function for scanner that splits on BOTH '\n' and '\r'
@@ -271,6 +272,10 @@ func (e *Engine) Transcribe(
 			line := strings.TrimSpace(scanner.Text())
 			if line == "" {
 				continue
+			}
+			recentLogs = append(recentLogs, line)
+			if len(recentLogs) > 25 {
+				recentLogs = recentLogs[len(recentLogs)-25:]
 			}
 
 			// 1. Check progress regex: progress = X%
@@ -338,7 +343,8 @@ func (e *Engine) Transcribe(
 	}
 
 	if waitErr != nil {
-		return nil, fmt.Errorf("whisper-cli execution failed: %w", waitErr)
+		detail := strings.Join(recentLogs, "\n")
+		return nil, fmt.Errorf("whisper-cli execution failed: %w, log: %s", waitErr, detail)
 	}
 
 	if onProgress != nil {
@@ -354,7 +360,8 @@ func (e *Engine) Transcribe(
 	// Read generated JSON
 	jsonData, err := os.ReadFile(jsonFile)
 	if err != nil {
-		return nil, fmt.Errorf("read whisper output json failed: %w", err)
+		detail := strings.Join(recentLogs, "\n")
+		return nil, fmt.Errorf("read whisper output json failed: %w; log: %s", err, detail)
 	}
 
 	var whisperOutput WhisperJSONOutput

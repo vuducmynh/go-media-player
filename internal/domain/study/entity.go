@@ -127,14 +127,18 @@ type HardwareInfo struct {
 	GPUVendor           string `json:"gpuVendor"` // "nvidia", "amd", "intel", "unknown"
 	GPUName             string `json:"gpuName"`
 	VRAMMB              int    `json:"vramMb"`
+	VRAMGB              int    `json:"vramGb"`
+	CPUName             string `json:"cpuName"`
 	CPUCores            int    `json:"cpuCores"`
 	CPUThreads          int    `json:"cpuThreads"`
 	RAMMB               int    `json:"ramMb"`
+	RAMGB               int    `json:"ramGb"`
 	AccelerationType    string `json:"accelerationType"`    // "cuda", "openblas", "cpu_avx"
 	AccelerationEnabled bool   `json:"accelerationEnabled"` // true if CUDA/BLAS dlls installed
 	RecommendedBackend  string `json:"recommendedBackend"`  // "cuda", "openblas", "cpu"
 	IsPortable          bool   `json:"isPortable"`
 	DataDir             string `json:"dataDir"`
 }
+
 
 

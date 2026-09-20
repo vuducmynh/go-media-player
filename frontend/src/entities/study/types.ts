@@ -115,9 +115,12 @@ export interface HardwareInfo {
   gpuVendor: 'nvidia' | 'amd' | 'intel' | 'unknown';
   gpuName: string;
   vramMb: number;
+  vramGb?: number;
+  cpuName?: string;
   cpuCores: number;
   cpuThreads: number;
   ramMb: number;
+  ramGb?: number;
   accelerationType: string;
   accelerationEnabled: boolean;
   recommendedBackend: string;
