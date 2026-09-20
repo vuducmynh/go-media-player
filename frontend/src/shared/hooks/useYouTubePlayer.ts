@@ -23,6 +23,42 @@ export interface PlayerError {
   isEmbedBlocked: boolean;
 }
 
+export function pickClosestQualityTo1080p(availableLevels: string[]): string {
+  if (!availableLevels || availableLevels.length === 0) return 'hd1080';
+
+  // Priority order closest to 1080p (prefers 1080p -> 720p -> 480p -> 360p -> highres -> 240p -> 144p)
+  const priority = ['hd1080', 'hd720', 'large', 'medium', 'highres', 'small', 'tiny'];
+  for (const q of priority) {
+    if (availableLevels.includes(q)) {
+      return q;
+    }
+  }
+  return availableLevels[0];
+}
+
+export function getQualityDisplayName(q: string): string {
+  switch (q) {
+    case 'hd1080':
+      return '1080p HD';
+    case 'hd720':
+      return '720p HD';
+    case 'highres':
+      return '1440p+ HD';
+    case 'large':
+      return '480p';
+    case 'medium':
+      return '360p';
+    case 'small':
+      return '240p';
+    case 'tiny':
+      return '144p';
+    case 'auto':
+      return 'Tự động';
+    default:
+      return q ? q.toUpperCase() : 'Tự động';
+  }
+}
+
 interface UseYouTubePlayerProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
   containerId?: string;
@@ -67,6 +103,7 @@ export function useYouTubePlayer({
   const [error, setError] = useState<PlayerError | null>(null);
   const [currentQuality, setCurrentQuality] = useState<string>('hd1080');
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
+  const [userSelectedQuality, setUserSelectedQuality] = useState<string | null>(null);
   const [retryCounter, setRetryCounter] = useState(0);
 
   // Load YouTube IFrame API script once
@@ -79,24 +116,30 @@ export function useYouTubePlayer({
     }
   }, []);
 
-  // Helper to enforce highest available quality (up to 1080p) once stream is actively playing
-  const applyHighestQuality = useCallback((player: any) => {
-    if (!player) return;
-    try {
-      if (typeof player.getAvailableQualityLevels === 'function') {
-        const levels: string[] = player.getAvailableQualityLevels() || [];
-        if (levels && levels.length > 0) {
-          setAvailableQualities(levels);
-          const preferredOrder = ['hd1080', 'highres', 'hd720', 'large', 'medium'];
-          const target = preferredOrder.find((p) => levels.includes(p)) || levels[0];
-          if (target && typeof player.setPlaybackQuality === 'function') {
-            player.setPlaybackQuality(target);
-            setCurrentQuality(target);
+  // Helper to enforce closest available quality to 1080p (or user's selected preference)
+  const applyBestQuality = useCallback(
+    (player: any) => {
+      if (!player) return;
+      try {
+        if (typeof player.getAvailableQualityLevels === 'function') {
+          const levels: string[] = player.getAvailableQualityLevels() || [];
+          if (levels && levels.length > 0) {
+            setAvailableQualities(levels);
+            const target =
+              userSelectedQuality && levels.includes(userSelectedQuality)
+                ? userSelectedQuality
+                : pickClosestQualityTo1080p(levels);
+
+            if (target && typeof player.setPlaybackQuality === 'function') {
+              player.setPlaybackQuality(target);
+              setCurrentQuality(target);
+            }
           }
         }
-      }
-    } catch (e) {}
-  }, []);
+      } catch (e) {}
+    },
+    [userSelectedQuality]
+  );
 
   // Initialize or update YouTube Player when videoId or retryCounter changes
   useEffect(() => {
@@ -114,6 +157,8 @@ export function useYouTubePlayer({
       setCurrentTime(0);
       setDuration(0);
       setError(null);
+      setAvailableQualities([]);
+      setUserSelectedQuality(null);
       return;
     }
 
@@ -191,8 +236,8 @@ export function useYouTubePlayer({
               if (state === window.YT?.PlayerState.PLAYING) {
                 setIsPlaying(true);
                 setIsBuffering(false);
-                // Dynamically lock to highest resolution when stream begins
-                applyHighestQuality(event.target);
+                // Scan available resolutions and pick closest to 1080p
+                applyBestQuality(event.target);
               } else if (state === window.YT?.PlayerState.BUFFERING) {
                 setIsBuffering(true);
               } else if (state === window.YT?.PlayerState.PAUSED) {
@@ -209,6 +254,12 @@ export function useYouTubePlayer({
             onPlaybackQualityChange: (event: any) => {
               if (isSubscribed && event.data) {
                 setCurrentQuality(event.data);
+                if (playerRef.current && typeof playerRef.current.getAvailableQualityLevels === 'function') {
+                  const levels = playerRef.current.getAvailableQualityLevels();
+                  if (levels && levels.length > 0) {
+                    setAvailableQualities(levels);
+                  }
+                }
               }
             },
             onError: (event: any) => {
@@ -266,7 +317,7 @@ export function useYouTubePlayer({
         containerRef.current.innerHTML = '';
       }
     };
-  }, [videoId, containerId, containerRef, retryCounter, applyHighestQuality]);
+  }, [videoId, containerId, containerRef, retryCounter, applyBestQuality]);
 
   // Deep Intervention 1: Instant Hold-to-Slow & Normal Speed
   useEffect(() => {
@@ -280,7 +331,7 @@ export function useYouTubePlayer({
     } catch (e) {}
   }, [isSlowHeld, slowSpeed, normalSpeed, isPlayerReady]);
 
-  // Deep Intervention 2: Realtime Polling Loop for Precision A-B Loop & Scrubber Time
+  // Deep Intervention 2: Realtime Polling Loop for Precision A-B Loop, Quality Levels & Scrubber Time
   useEffect(() => {
     if (!isPlayerReady || !playerRef.current) return;
 
@@ -297,6 +348,14 @@ export function useYouTubePlayer({
           setDuration(dur);
         }
 
+        // Dynamically query available quality levels if list was initially empty
+        if (typeof player.getAvailableQualityLevels === 'function') {
+          const levels: string[] = player.getAvailableQualityLevels();
+          if (levels && levels.length > 0 && levels.length !== availableQualities.length) {
+            setAvailableQualities(levels);
+          }
+        }
+
         // A-B Repeat Loop Intervention
         if (isLoopActive && loopB > loopA && loopA >= 0) {
           if (cur >= loopB) {
@@ -309,7 +368,7 @@ export function useYouTubePlayer({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isPlayerReady, isLoopActive, loopA, loopB, duration, onTimeUpdate]);
+  }, [isPlayerReady, isLoopActive, loopA, loopB, duration, availableQualities.length, onTimeUpdate]);
 
   // Player Controls
   const togglePlay = useCallback(() => {
@@ -395,6 +454,7 @@ export function useYouTubePlayer({
   }, [isMuted]);
 
   const setQuality = useCallback((quality: string) => {
+    setUserSelectedQuality(quality);
     const player = playerRef.current;
     if (!player) return;
 

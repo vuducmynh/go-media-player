@@ -18,13 +18,16 @@ import {
   ExternalLink,
   AlertTriangle,
   RefreshCw,
+  Sliders,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { MediaFile, AppSettings } from '../types';
 import { formatTime } from '../utils/formatters';
 import { AudioVisualizer } from './AudioVisualizer';
 import { ListeningControls } from './ListeningControls';
 import { useHotkeys } from '../hooks/useHotkeys';
-import { useYouTubePlayer } from '../shared/hooks/useYouTubePlayer';
+import { useYouTubePlayer, getQualityDisplayName } from '../shared/hooks/useYouTubePlayer';
 
 interface PlayerViewProps {
   currentFile: MediaFile | null;
@@ -71,6 +74,23 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const [isHoveringTimeline, setIsHoveringTimeline] = useState<boolean>(false);
   const [hoverTime, setHoverTime] = useState<number>(0);
   const [hoverPositionRatio, setHoverPositionRatio] = useState<number>(0);
+
+  const [isQualityMenuOpen, setIsQualityMenuOpen] = useState<boolean>(false);
+  const qualityMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (qualityMenuRef.current && !qualityMenuRef.current.contains(e.target as Node)) {
+        setIsQualityMenuOpen(false);
+      }
+    };
+    if (isQualityMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isQualityMenuOpen]);
 
   const isYouTube = currentFile?.source === 'youtube' || Boolean(currentFile?.youtubeId);
   const youtubeVideoId = isYouTube ? (currentFile?.youtubeId || currentFile?.id || null) : null;
@@ -621,18 +641,62 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                   {isYouTube ? (currentFile.relativeDir || 'YouTube') : currentFile.name}
                 </p>
                 {isYouTube && (
-                  <span
-                    className="px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold uppercase tracking-wider shrink-0"
-                    title={`Độ phân giải: ${ytPlayer.currentQuality || '1080p HD'}`}
-                  >
-                    {ytPlayer.currentQuality === 'hd1080'
-                      ? '1080p HD'
-                      : ytPlayer.currentQuality === 'hd720'
-                      ? '720p HD'
-                      : ytPlayer.currentQuality === 'highres'
-                      ? 'Gốc HD'
-                      : ytPlayer.currentQuality || '1080p HD'}
-                  </span>
+                  <div className="relative" ref={qualityMenuRef}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsQualityMenuOpen(!isQualityMenuOpen);
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-red-600/20 hover:bg-red-600/30 active:scale-95 text-red-400 border border-red-500/30 text-[9px] font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                      title="Chất lượng video: Nhấp để xem các mức khả dụng và chọn độ phân giải"
+                    >
+                      <Sliders className="w-2.5 h-2.5 text-red-400" />
+                      <span>{getQualityDisplayName(ytPlayer.currentQuality)}</span>
+                      <ChevronDown
+                        className={`w-2.5 h-2.5 transition-transform ${
+                          isQualityMenuOpen ? 'rotate-180 text-red-300' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {/* Quality Popup Menu */}
+                    {isQualityMenuOpen && (
+                      <div className="absolute bottom-full mb-2 left-0 w-48 bg-fluent-bg-darker border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in text-xs">
+                        <div className="px-2 py-1 text-[9px] font-semibold text-fluent-text-muted uppercase tracking-wider border-b border-white/5 mb-1 flex items-center justify-between">
+                          <span>Độ phân giải video</span>
+                          <span className="text-red-400 font-normal">Tối ưu 1080p</span>
+                        </div>
+                        {ytPlayer.availableQualities.length === 0 ? (
+                          <div className="px-2 py-1.5 text-[10px] text-fluent-text-muted">
+                            {getQualityDisplayName(ytPlayer.currentQuality)} (Tự động)
+                          </div>
+                        ) : (
+                          ytPlayer.availableQualities.map((q) => {
+                            const isCurrent = ytPlayer.currentQuality === q;
+                            return (
+                              <button
+                                key={q}
+                                type="button"
+                                onClick={() => {
+                                  ytPlayer.setQuality(q);
+                                  setIsQualityMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[11px] transition-colors ${
+                                  isCurrent
+                                    ? 'bg-red-600/20 text-red-400 font-bold border border-red-500/30'
+                                    : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
+                                }`}
+                              >
+                                <span>{getQualityDisplayName(q)}</span>
+                                {isCurrent && <Check className="w-3.5 h-3.5 text-red-400" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
