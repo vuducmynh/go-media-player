@@ -17,6 +17,22 @@ declare global {
   }
 }
 
+export type PlayerStatus =
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'playing'
+  | 'buffering'
+  | 'paused'
+  | 'ended'
+  | 'error';
+
+export interface PlayerError {
+  code: number;
+  message: string;
+  isEmbedBlocked: boolean;
+}
+
 interface UseYouTubePlayerProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
   containerId?: string;
@@ -49,13 +65,18 @@ export function useYouTubePlayer({
   onReady,
 }: UseYouTubePlayerProps) {
   const playerRef = useRef<any>(null);
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [playerStatus, setPlayerStatus] = useState<PlayerStatus>('idle');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(normalSpeed);
   const [volume, setVolumeState] = useState(0.9);
   const [isMuted, setIsMuted] = useState(false);
+  const [error, setError] = useState<PlayerError | null>(null);
+  const [currentQuality, setCurrentQuality] = useState<string>('hd1080');
+  const [availableQualities, setAvailableQualities] = useState<string[]>([]);
+  const [retryCounter, setRetryCounter] = useState(0);
 
   // Load YouTube IFrame API script once
   useEffect(() => {
@@ -67,7 +88,29 @@ export function useYouTubePlayer({
     }
   }, []);
 
-  // Initialize or update YouTube Player when videoId changes
+  // Helper to enforce highest available quality (1080p prioritized)
+  const applyHighestQuality = useCallback((player: any) => {
+    if (!player) return;
+    try {
+      if (typeof player.getAvailableQualityLevels === 'function') {
+        const levels: string[] = player.getAvailableQualityLevels() || [];
+        if (levels && levels.length > 0) {
+          setAvailableQualities(levels);
+          const preferredOrder = ['hd1080', 'highres', 'hd720', 'large', 'medium'];
+          const target = preferredOrder.find((p) => levels.includes(p)) || levels[0];
+          if (target && typeof player.setPlaybackQuality === 'function') {
+            player.setPlaybackQuality(target);
+            setCurrentQuality(target);
+          }
+        }
+      } else if (typeof player.setPlaybackQuality === 'function') {
+        player.setPlaybackQuality('hd1080');
+        setCurrentQuality('hd1080');
+      }
+    } catch (e) {}
+  }, []);
+
+  // Initialize or update YouTube Player when videoId or retryCounter changes
   useEffect(() => {
     if (!videoId) {
       if (playerRef.current) {
@@ -76,14 +119,30 @@ export function useYouTubePlayer({
         } catch (e) {}
         playerRef.current = null;
       }
-      setIsPlayerReady(false);
+      setPlayerStatus('idle');
       setIsPlaying(false);
+      setIsBuffering(false);
       setCurrentTime(0);
       setDuration(0);
+      setError(null);
       return;
     }
 
     let isSubscribed = true;
+    setPlayerStatus('loading');
+    setError(null);
+
+    // Timeout check: If after 15s player is not ready or failed
+    const loadTimeout = setTimeout(() => {
+      if (isSubscribed && playerStatus === 'loading') {
+        setError({
+          code: 408,
+          message: 'Quá thời gian kết nối đến máy chủ YouTube. Vui lòng kiểm tra lại mạng internet.',
+          isEmbedBlocked: false,
+        });
+        setPlayerStatus('error');
+      }
+    }, 15000);
 
     const createPlayer = () => {
       if (!isSubscribed || !window.YT || !window.YT.Player) return;
@@ -106,49 +165,108 @@ export function useYouTubePlayer({
         } catch (e) {}
       }
 
-      playerRef.current = new window.YT.Player(targetEl, {
-        videoId: videoId,
-        width: '100%',
-        height: '100%',
-        playerVars: {
-          autoplay: 1,
-          start: Math.floor(initialTime),
-          modestbranding: 1,
-          rel: 0,
-          iv_load_policy: 3,
-          enablejsapi: 1,
-          origin: window.location.origin,
-        },
-        events: {
-          onReady: (event: any) => {
-            if (!isSubscribed) return;
-            setIsPlayerReady(true);
-            const dur = event.target.getDuration();
-            setDuration(dur);
-            if (initialTime > 0) {
-              event.target.seekTo(initialTime, true);
-            }
-            event.target.setPlaybackRate(isSlowHeld ? slowSpeed : normalSpeed);
-            event.target.playVideo();
-            onReady?.();
+      try {
+        playerRef.current = new window.YT.Player(targetEl, {
+          videoId: videoId,
+          width: '100%',
+          height: '100%',
+          playerVars: {
+            autoplay: 1,
+            start: Math.floor(initialTime),
+            modestbranding: 1,
+            rel: 0,
+            iv_load_policy: 3,
+            enablejsapi: 1,
+            origin: window.location.origin,
+            suggestedQuality: 'hd1080',
           },
-          onStateChange: (event: any) => {
-            if (!isSubscribed) return;
-            const state = event.data;
-            if (state === window.YT?.PlayerState.PLAYING) {
-              setIsPlaying(true);
-            } else if (
-              state === window.YT?.PlayerState.PAUSED ||
-              state === window.YT?.PlayerState.BUFFERING
-            ) {
+          events: {
+            onReady: (event: any) => {
+              if (!isSubscribed) return;
+              clearTimeout(loadTimeout);
+              setPlayerStatus('ready');
+              setError(null);
+
+              const dur = event.target.getDuration();
+              setDuration(dur);
+              if (initialTime > 0) {
+                event.target.seekTo(initialTime, true);
+              }
+
+              // Apply highest resolution immediately
+              applyHighestQuality(event.target);
+
+              event.target.setPlaybackRate(isSlowHeld ? slowSpeed : normalSpeed);
+              event.target.playVideo();
+              onReady?.();
+            },
+            onStateChange: (event: any) => {
+              if (!isSubscribed) return;
+              clearTimeout(loadTimeout);
+              const state = event.data;
+
+              if (state === window.YT?.PlayerState.PLAYING) {
+                setIsPlaying(true);
+                setIsBuffering(false);
+                setPlayerStatus('playing');
+                // Re-enforce highest quality when stream starts
+                applyHighestQuality(event.target);
+              } else if (state === window.YT?.PlayerState.BUFFERING) {
+                setIsBuffering(true);
+                setPlayerStatus('buffering');
+              } else if (state === window.YT?.PlayerState.PAUSED) {
+                setIsPlaying(false);
+                setIsBuffering(false);
+                setPlayerStatus('paused');
+              } else if (state === window.YT?.PlayerState.ENDED) {
+                setIsPlaying(false);
+                setIsBuffering(false);
+                setPlayerStatus('ended');
+                onEnded?.();
+              } else if (state === window.YT?.PlayerState.CUED) {
+                setPlayerStatus('ready');
+                setIsBuffering(false);
+              }
+            },
+            onPlaybackQualityChange: (event: any) => {
+              if (isSubscribed && event.data) {
+                setCurrentQuality(event.data);
+              }
+            },
+            onError: (event: any) => {
+              if (!isSubscribed) return;
+              clearTimeout(loadTimeout);
+              const code = event.data;
+              let msg = 'Không thể phát video YouTube này.';
+              let isBlocked = false;
+
+              if (code === 2) {
+                msg = 'Đường dẫn hoặc Video ID không hợp lệ.';
+              } else if (code === 5) {
+                msg = 'Lỗi phát HTML5 từ máy chủ YouTube.';
+              } else if (code === 100) {
+                msg = 'Video không tồn tại, đã bị xóa hoặc được đặt ở chế độ riêng tư.';
+              } else if (code === 101 || code === 150) {
+                msg = 'Chủ sở hữu video không cho phép phát trên các ứng dụng nhúng ngoài web YouTube.';
+                isBlocked = true;
+              }
+
+              setError({ code, message: msg, isEmbedBlocked: isBlocked });
+              setPlayerStatus('error');
               setIsPlaying(false);
-            } else if (state === window.YT?.PlayerState.ENDED) {
-              setIsPlaying(false);
-              onEnded?.();
-            }
+              setIsBuffering(false);
+            },
           },
-        },
-      });
+        });
+      } catch (err: any) {
+        clearTimeout(loadTimeout);
+        setError({
+          code: -1,
+          message: err?.message || 'Có lỗi xảy ra khi khởi tạo trình phát YouTube.',
+          isEmbedBlocked: false,
+        });
+        setPlayerStatus('error');
+      }
     };
 
     if (window.YT && window.YT.Player) {
@@ -163,6 +281,7 @@ export function useYouTubePlayer({
 
     return () => {
       isSubscribed = false;
+      clearTimeout(loadTimeout);
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
@@ -173,23 +292,23 @@ export function useYouTubePlayer({
         containerRef.current.innerHTML = '';
       }
     };
-  }, [videoId, containerId, containerRef]);
+  }, [videoId, containerId, containerRef, retryCounter, applyHighestQuality]);
 
   // Deep Intervention 1: Instant Hold-to-Slow & Normal Speed
   useEffect(() => {
     const player = playerRef.current;
-    if (!player || !isPlayerReady) return;
+    if (!player || playerStatus === 'loading' || playerStatus === 'error') return;
 
     try {
       const targetRate = isSlowHeld ? slowSpeed : normalSpeed;
       player.setPlaybackRate(targetRate);
       setPlaybackRate(targetRate);
     } catch (e) {}
-  }, [isSlowHeld, slowSpeed, normalSpeed, isPlayerReady]);
+  }, [isSlowHeld, slowSpeed, normalSpeed, playerStatus]);
 
   // Deep Intervention 2: Realtime Polling Loop for Precision A-B Loop & Scrubber Time
   useEffect(() => {
-    if (!isPlayerReady || !playerRef.current) return;
+    if (playerStatus === 'loading' || playerStatus === 'error' || !playerRef.current) return;
 
     const interval = setInterval(() => {
       try {
@@ -216,12 +335,12 @@ export function useYouTubePlayer({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isPlayerReady, isLoopActive, loopA, loopB, duration, onTimeUpdate]);
+  }, [playerStatus, isLoopActive, loopA, loopB, duration, onTimeUpdate]);
 
   // Player Controls
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
-    if (!player || !isPlayerReady) return;
+    if (!player) return;
 
     try {
       const state = typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1;
@@ -233,13 +352,13 @@ export function useYouTubePlayer({
         setIsPlaying(true);
       }
     } catch (e) {}
-  }, [isPlayerReady, isPlaying]);
+  }, [isPlaying]);
 
   // Deep Intervention 3: Instant Seek without buffering lag
   const seekTo = useCallback(
     (seconds: number) => {
       const player = playerRef.current;
-      if (!player || !isPlayerReady) return;
+      if (!player) return;
 
       try {
         const dur = (typeof player.getDuration === 'function' ? player.getDuration() : 0) || duration;
@@ -248,53 +367,47 @@ export function useYouTubePlayer({
         setCurrentTime(clamped);
       } catch (e) {}
     },
-    [isPlayerReady, duration]
+    [duration]
   );
 
   const seekDelta = useCallback(
     (delta: number) => {
       const player = playerRef.current;
-      if (!player || !isPlayerReady) return;
+      if (!player) return;
 
       try {
         const cur = (typeof player.getCurrentTime === 'function' ? player.getCurrentTime() : 0) || currentTime;
         seekTo(cur + delta);
       } catch (e) {}
     },
-    [isPlayerReady, currentTime, seekTo]
+    [currentTime, seekTo]
   );
 
-  const setSpeed = useCallback(
-    (rate: number) => {
-      const player = playerRef.current;
-      if (!player || !isPlayerReady) return;
+  const setSpeed = useCallback((rate: number) => {
+    const player = playerRef.current;
+    if (!player) return;
 
-      try {
-        player.setPlaybackRate(rate);
-        setPlaybackRate(rate);
-      } catch (e) {}
-    },
-    [isPlayerReady]
-  );
+    try {
+      player.setPlaybackRate(rate);
+      setPlaybackRate(rate);
+    } catch (e) {}
+  }, []);
 
-  const setVolume = useCallback(
-    (vol: number) => {
-      const player = playerRef.current;
-      if (!player || !isPlayerReady) return;
+  const setVolume = useCallback((vol: number) => {
+    const player = playerRef.current;
+    if (!player) return;
 
-      try {
-        const clamped = Math.max(0, Math.min(vol, 1));
-        player.setVolume(clamped * 100);
-        setVolumeState(clamped);
-        setIsMuted(clamped === 0);
-      } catch (e) {}
-    },
-    [isPlayerReady]
-  );
+    try {
+      const clamped = Math.max(0, Math.min(vol, 1));
+      player.setVolume(clamped * 100);
+      setVolumeState(clamped);
+      setIsMuted(clamped === 0);
+    } catch (e) {}
+  }, []);
 
   const toggleMute = useCallback(() => {
     const player = playerRef.current;
-    if (!player || !isPlayerReady) return;
+    if (!player) return;
 
     try {
       if (isMuted) {
@@ -305,21 +418,45 @@ export function useYouTubePlayer({
         setIsMuted(true);
       }
     } catch (e) {}
-  }, [isPlayerReady, isMuted]);
+  }, [isMuted]);
+
+  const setQuality = useCallback((quality: string) => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    try {
+      if (typeof player.setPlaybackQuality === 'function') {
+        player.setPlaybackQuality(quality);
+        setCurrentQuality(quality);
+      }
+    } catch (e) {}
+  }, []);
+
+  const retry = useCallback(() => {
+    setRetryCounter((c) => c + 1);
+  }, []);
 
   return {
-    isReady: isPlayerReady,
+    isReady: playerStatus !== 'loading' && playerStatus !== 'error' && playerStatus !== 'idle',
+    isLoading: playerStatus === 'loading',
+    isBuffering,
+    status: playerStatus,
+    error,
     isPlaying,
     currentTime,
     duration,
     playbackRate,
     volume,
     isMuted,
+    currentQuality,
+    availableQualities,
     togglePlay,
     seekTo,
     seekDelta,
     setSpeed,
     setVolume,
     toggleMute,
+    setQuality,
+    retry,
   };
 }

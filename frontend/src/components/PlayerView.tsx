@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   Youtube,
   ExternalLink,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { MediaFile, AppSettings } from '../types';
 import { formatTime } from '../utils/formatters';
@@ -426,6 +428,80 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
           className={`w-full h-full ${isYouTube ? 'flex items-center justify-center' : 'hidden'}`}
         />
 
+        {/* YouTube Loading Overlay */}
+        {isYouTube && ytPlayer.isLoading && !ytPlayer.error && (
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center z-10 p-6 animate-fade-in text-center select-none">
+            {currentFile.thumbnail && (
+              <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+                <img
+                  src={currentFile.thumbnail}
+                  alt=""
+                  className="w-full h-full object-cover scale-110 blur-xl"
+                />
+              </div>
+            )}
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-2xl bg-red-600/20 border border-red-500/30 flex items-center justify-center mb-4 shadow-xl">
+                <Youtube className="w-8 h-8 text-red-500 animate-pulse" />
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                <h3 className="text-sm font-bold text-white tracking-wide">
+                  Đang tải Video YouTube...
+                </h3>
+              </div>
+              <p className="text-xs text-fluent-text-secondary max-w-sm truncate">
+                {currentFile.title || currentFile.name}
+              </p>
+              <span className="mt-3 px-2.5 py-1 rounded-full bg-white/10 text-[10px] text-fluent-text-muted font-mono">
+                Ưu tiên chất lượng cao nhất (1080p HD)
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* YouTube Buffering Overlay (Subtle badge, non-blocking) */}
+        {isYouTube && ytPlayer.isBuffering && !ytPlayer.isLoading && !ytPlayer.error && (
+          <div className="absolute top-4 right-4 z-20 px-3 py-1.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/10 flex items-center gap-2 shadow-fluent animate-fade-in pointer-events-none">
+            <div className="w-3.5 h-3.5 border-2 border-fluent-accent border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs text-white font-medium">Đang nạp đệm...</span>
+          </div>
+        )}
+
+        {/* YouTube Error Overlay */}
+        {isYouTube && ytPlayer.error && (
+          <div className="absolute inset-0 bg-fluent-bg-darker/95 backdrop-blur-md flex flex-col items-center justify-center z-20 p-6 animate-fade-in text-center select-none">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-xl">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-1">
+              {ytPlayer.error.isEmbedBlocked ? 'Video bị giới hạn nhúng phát' : 'Không thể phát video YouTube'}
+            </h3>
+            <p className="text-xs text-fluent-text-secondary max-w-md mb-2">
+              {ytPlayer.error.message}
+            </p>
+            {ytPlayer.error.isEmbedBlocked && (
+              <p className="text-[11px] text-amber-300/80 max-w-sm mb-5 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
+                Chủ sở hữu video này đã tắt quyền nhúng ngoài web YouTube. Bạn có thể bấm nút bên dưới để mở nghe trực tiếp.
+              </p>
+            )}
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                onClick={ytPlayer.retry}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-semibold transition-all border border-white/10"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Thử tải lại
+              </button>
+              <button
+                onClick={() => onOpenFileFolder(currentFile.path)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white text-xs font-semibold transition-all shadow-lg shadow-red-600/30"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Mở xem trên YouTube
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Local Video or Audio */}
         {!isYouTube && (
           currentFile.type === 'video' ? (
@@ -569,9 +645,27 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-fluent-text-secondary truncate">
-                {isYouTube ? (currentFile.relativeDir || 'YouTube') : currentFile.name}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-[11px] text-fluent-text-secondary truncate">
+                  {isYouTube ? (currentFile.relativeDir || 'YouTube') : currentFile.name}
+                </p>
+                {isYouTube && (
+                  <span
+                    className="px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold uppercase tracking-wider shrink-0"
+                    title={`Độ phân giải: ${ytPlayer.currentQuality || '1080p HD'}`}
+                  >
+                    {ytPlayer.currentQuality === 'hd1080'
+                      ? '1080p HD'
+                      : ytPlayer.currentQuality === 'hd720'
+                      ? '720p HD'
+                      : ytPlayer.currentQuality === 'highres'
+                      ? 'Gốc HD'
+                      : ytPlayer.currentQuality
+                      ? `${ytPlayer.currentQuality}`
+                      : '1080p HD'}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
