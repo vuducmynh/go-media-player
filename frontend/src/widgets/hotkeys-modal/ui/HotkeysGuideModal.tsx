@@ -31,7 +31,7 @@ export const HotkeysGuideModal: React.FC<HotkeysGuideModalProps> = ({
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-fluent-bg-subtle/50">
           <div className="flex items-center gap-2">
             <Keyboard className="w-5 h-5 text-fluent-accent" />
-            <h2 className="text-base font-bold text-white">Bảng phím tắt điều khiển</h2>
+            <h2 className="text-base font-bold text-white">Phím tắt</h2>
           </div>
           <button
             onClick={onClose}
@@ -46,37 +46,37 @@ export const HotkeysGuideModal: React.FC<HotkeysGuideModalProps> = ({
           {/* Group 1: Listening & Smart Slow */}
           <div className="bg-fluent-bg-card p-4 rounded-xl border border-purple-500/20 shadow-sm">
             <h3 className="text-xs font-bold text-purple-300 flex items-center gap-1.5 uppercase tracking-wider mb-3">
-              <Zap className="w-4 h-4 text-purple-400" /> Tính năng học Listening chuyên sâu
+              <Zap className="w-4 h-4 text-purple-400" /> Luyện nghe & Lặp đoạn
             </h3>
             <div className="space-y-2">
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Giữ phím để giảm tốc độ (Hold-to-Slow)</span>
+                <span className="text-white font-medium">Nhấn giữ để nghe chậm</span>
                 <kbd className="px-2 py-1 rounded bg-purple-950/80 border border-purple-500/50 text-purple-200 font-mono text-[11px] shadow-sm">
-                  Giữ phím [{holdKeyName}] ({settings.slowSpeed}x)
+                  Giữ [{holdKeyName}] ({settings.slowSpeed}x)
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Đặt mốc bắt đầu Loop A</span>
+                <span className="text-white font-medium">Điểm bắt đầu lặp</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Phím [A]
+                  [A]
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Đặt mốc kết thúc Loop B</span>
+                <span className="text-white font-medium">Điểm kết thúc lặp</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Phím [B]
+                  [B]
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Bật / Tắt lặp đoạn A-B (Toggle Loop)</span>
+                <span className="text-white font-medium">Bật / Tắt lặp đoạn</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Phím [L]
+                  [L]
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1">
-                <span className="text-white font-medium">Xóa các mốc lặp A-B</span>
+                <span className="text-white font-medium">Hủy lặp đoạn</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Phím [C]
+                  [C]
                 </kbd>
               </div>
             </div>
@@ -85,29 +85,29 @@ export const HotkeysGuideModal: React.FC<HotkeysGuideModalProps> = ({
           {/* Group 2: Playback Controls */}
           <div className="bg-fluent-bg-card p-4 rounded-xl border border-white/5">
             <h3 className="text-xs font-bold text-fluent-accent flex items-center gap-1.5 uppercase tracking-wider mb-3">
-              <Play className="w-4 h-4 text-fluent-accent" /> Điều khiển phát & Tua nhanh
+              <Play className="w-4 h-4 text-fluent-accent" /> Phát & Tua
             </h3>
             <div className="space-y-2">
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Phát / Tạm dừng (Play / Pause)</span>
+                <span className="text-white font-medium">Phát / Tạm dừng</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Phím [Space]
+                  [Space]
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-white/5">
                 <span className="text-white font-medium">Tua lùi ({settings.jumpSeconds}s)</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Mũi tên Trái [←]
+                  [←]
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Tua tiến ({settings.jumpSeconds}s)</span>
+                <span className="text-white font-medium">Tua tới ({settings.jumpSeconds}s)</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Mũi tên Phải [→]
+                  [→]
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Tăng / Giảm tốc độ phát (0.1x)</span>
+                <span className="text-white font-medium">Tăng / Giảm tốc độ</span>
                 <div className="flex gap-1">
                   <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
                     [
@@ -118,9 +118,9 @@ export const HotkeysGuideModal: React.FC<HotkeysGuideModalProps> = ({
                 </div>
               </div>
               <div className="flex items-center justify-between py-1">
-                <span className="text-white font-medium">Toàn màn hình Video</span>
+                <span className="text-white font-medium">Bật / Tắt toàn màn hình</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Phím [F] / Nhấp đúp Video
+                  [F] hoặc nhấp đúp
                 </kbd>
               </div>
             </div>
@@ -133,20 +133,20 @@ export const HotkeysGuideModal: React.FC<HotkeysGuideModalProps> = ({
             </h3>
             <div className="space-y-2">
               <div className="flex items-center justify-between py-1 border-b border-white/5">
-                <span className="text-white font-medium">Tăng / Giảm âm lượng (+/- 5%)</span>
+                <span className="text-white font-medium">Tăng / Giảm âm lượng</span>
                 <div className="flex gap-1">
                   <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                    Mũi tên Lên [↑]
+                    [↑]
                   </kbd>
                   <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                    Mũi tên Xuống [↓]
+                    [↓]
                   </kbd>
                 </div>
               </div>
               <div className="flex items-center justify-between py-1">
-                <span className="text-white font-medium">Tắt / Bật tiếng (Mute)</span>
+                <span className="text-white font-medium">Bật / Tắt tiếng</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 border border-white/10 text-white font-mono text-[11px]">
-                  Phím [M]
+                  [M]
                 </kbd>
               </div>
             </div>
@@ -159,7 +159,7 @@ export const HotkeysGuideModal: React.FC<HotkeysGuideModalProps> = ({
             onClick={onClose}
             className="px-5 py-1.5 rounded-lg bg-fluent-accent text-black font-semibold text-xs shadow-accent-glow hover:bg-fluent-accent-hover transition-colors"
           >
-            Đã hiểu
+            Đóng
           </button>
         </div>
       </div>

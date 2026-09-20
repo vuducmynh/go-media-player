@@ -171,7 +171,7 @@ export const InstallUpdateModal: React.FC<InstallUpdateModalProps> = ({
                 <div className="flex items-center gap-2.5">
                   <Layers className="w-4 h-4 text-emerald-400" />
                   <span className="text-xs sm:text-sm font-semibold text-white">
-                    Cải tiến (Improvements)
+                    Cải tiến
                   </span>
                   <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                     {parsedNotes.improvements.length}
@@ -212,7 +212,7 @@ export const InstallUpdateModal: React.FC<InstallUpdateModalProps> = ({
                 <div className="flex items-center gap-2.5">
                   <Wrench className="w-4 h-4 text-amber-400" />
                   <span className="text-xs sm:text-sm font-semibold text-white">
-                    Sửa lỗi (Fixes)
+                    Sửa lỗi
                   </span>
                   <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
                     {parsedNotes.fixes.length}
@@ -253,7 +253,7 @@ export const InstallUpdateModal: React.FC<InstallUpdateModalProps> = ({
                 <div className="flex items-center gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-cyan-400" />
                   <span className="text-xs sm:text-sm font-semibold text-white">
-                    Bản vá (Patches)
+                    Bản vá
                   </span>
                   <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
                     {parsedNotes.patches.length}
@@ -310,7 +310,7 @@ export const InstallUpdateModal: React.FC<InstallUpdateModalProps> = ({
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
               >
                 <Download className="w-4 h-4 stroke-[2.5]" />
-                <span>Cài đặt & Thay thế</span>
+                <span>Cài đặt ngay</span>
               </button>
             )}
 

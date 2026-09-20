@@ -64,7 +64,7 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
         {/* Title & Status */}
         <div>
           <h3 className="text-base font-bold text-white mb-1">
-            Đang Xử Lý Phân Đoạn Câu (Whisper AI)
+            Đang tạo bài luyện nghe
           </h3>
           <p className="text-xs text-fluent-text-secondary max-w-md">
             {statusText}
@@ -84,7 +84,7 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
           <div className="w-full p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] text-left flex items-start gap-2">
             <span className="text-amber-400 font-bold shrink-0">💡 Gợi ý:</span>
             <span>
-              Bạn đang dùng bản Large-v3 32 tầng giải mã (~1.1GB). Để tốc độ nhận diện nhanh hơn gấp 8 lần, bạn có thể chọn tải bản <strong>Whisper Turbo Q5</strong> (~547MB) trong phần Quản lý Model.
+              Bản mô hình lớn (~1.1GB) cần nhiều thời gian xử lý. Để nhận diện nhanh hơn, bạn có thể chọn bản <strong>Whisper Turbo Q5</strong> (~547MB).
             </span>
           </div>
         )}
@@ -93,7 +93,7 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
         <div className="w-full space-y-2">
           <div className="flex items-center justify-between text-xs font-semibold text-fluent-text-muted">
             <span className="flex items-center gap-1.5 text-fluent-accent">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Tiến độ nhận diện
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Tiến độ
             </span>
             <span className="text-white font-mono">{percentage}%</span>
           </div>
@@ -115,7 +115,7 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
                 <span>Đã nhận diện: {sentenceCount} câu</span>
               </span>
               <span className="text-[10px] text-fluent-text-muted font-sans">
-                Cuộn lên để xem lại ({recentSentences.length} câu)
+                Đã cuộn ({recentSentences.length} câu)
               </span>
             </div>
 
@@ -143,7 +143,7 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
                 className="absolute bottom-4 right-4 flex items-center gap-1 px-2.5 py-1 rounded-full bg-fluent-accent text-black text-[11px] font-semibold shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer"
               >
                 <ArrowDown className="w-3 h-3" />
-                <span>Xuống mới nhất</span>
+                <span>Về cuối</span>
               </button>
             )}
           </div>
@@ -152,17 +152,17 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
         {/* Footer info & Cancel Button */}
         <div className="w-full pt-2 flex items-center justify-between border-t border-white/5">
           <p className="text-[11px] text-fluent-text-muted text-left">
-            Offline 100% trên máy. Tự động lưu khi xong.
+            Xử lý trên máy của bạn. Tự động lưu khi xong.
           </p>
 
           {onCancel && (
             <button
               onClick={onCancel}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold transition-all active:scale-95 cursor-pointer shadow-sm"
-              title="Dừng tiến trình nhận diện âm thanh và giải phóng tài nguyên"
+              title="Hủy tiến trình"
             >
               <XCircle className="w-3.5 h-3.5" />
-              <span>Dừng quá trình</span>
+              <span>Hủy</span>
             </button>
           )}
         </div>

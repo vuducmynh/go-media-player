@@ -222,10 +222,10 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-white tracking-wide">
-                Quản Lý Mô Hình & Hiệu Suất AI Whisper
+                Mô hình AI Whisper
               </h2>
               <p className="text-[10px] text-fluent-text-muted">
-                100% Offline & Bảo Mật • Tối ưu đa nền tảng NVIDIA / AMD / Intel CPU
+                Hoạt động offline • Tự động tối ưu phần cứng
               </p>
             </div>
           </div>
@@ -605,11 +605,11 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
                     <>Đang xử lý tải...</>
                   ) : isSelectedDownloaded ? (
                     <>
-                      <Sparkles className="w-3.5 h-3.5 fill-current" /> Bắt đầu với model này
+                      <Sparkles className="w-3.5 h-3.5 fill-current" /> Bắt đầu luyện nghe
                     </>
                   ) : (
                     <>
-                      <Download className="w-3.5 h-3.5" /> Tải model & Bắt đầu
+                      <Download className="w-3.5 h-3.5" /> Tải về & Bắt đầu
                     </>
                   )}
                 </button>

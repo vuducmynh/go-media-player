@@ -43,7 +43,7 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = ({
             <button
               type="button"
               onClick={onCheckUpdate}
-              title="Kiểm tra bản cập nhật mới (GitHub)"
+              title="Kiểm tra cập nhật"
               className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
             >
               <RefreshCw className="w-3 h-3" />
@@ -65,7 +65,7 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = ({
         <button
           type="button"
           onClick={onOpenInstallModal}
-          title={`Có bản cập nhật mới ${updateInfo?.latestVersion || ''}. Bấm để xem thông tin chi tiết & cập nhật!`}
+          title={`Có bản cập nhật ${updateInfo?.latestVersion || ''}`}
           className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[10px] font-semibold transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)] hover:scale-105 active:scale-95 cursor-pointer"
         >
           <Sparkles className="w-2.5 h-2.5 text-emerald-300 animate-pulse" />
@@ -116,7 +116,7 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = ({
         <button
           type="button"
           onClick={onOpenInstallModal}
-          title="Bản cập nhật đã tải xong! Bấm để cài đặt"
+          title="Cài đặt bản cập nhật"
           className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black text-[10px] font-bold shadow-[0_0_12px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
         >
           <Download className="w-2.5 h-2.5 stroke-[2.5]" />
@@ -140,7 +140,7 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = ({
         <button
           type="button"
           onClick={onCheckUpdate}
-          title="Lỗi cập nhật. Bấm để thử lại"
+          title="Thử lại"
           className="text-[10px] text-rose-400 hover:underline"
         >
           Thử lại

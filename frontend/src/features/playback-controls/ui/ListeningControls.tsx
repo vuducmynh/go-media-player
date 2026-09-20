@@ -63,7 +63,7 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
         {/* Jump Backward */}
         <button
           onClick={() => onSeekDelta(-jumpSeconds)}
-          title={`Tua lùi ${jumpSeconds}s (Phím Mũi tên Trái)`}
+          title={`Tua lùi ${jumpSeconds}s (←)`}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-fluent-bg-card hover:bg-fluent-bg-hover active:bg-fluent-bg-active text-fluent-text-primary border border-white/5 transition-all shadow-sm group"
         >
           <RotateCcw className="w-3.5 h-3.5 text-fluent-accent group-hover:-rotate-45 transition-transform" />
@@ -73,7 +73,7 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
         {/* Jump Forward */}
         <button
           onClick={() => onSeekDelta(jumpSeconds)}
-          title={`Tua tiến ${jumpSeconds}s (Phím Mũi tên Phải)`}
+          title={`Tua tới ${jumpSeconds}s (→)`}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-fluent-bg-card hover:bg-fluent-bg-hover active:bg-fluent-bg-active text-fluent-text-primary border border-white/5 transition-all shadow-sm group"
         >
           <RotateCw className="w-3.5 h-3.5 text-fluent-accent group-hover:rotate-45 transition-transform" />
@@ -87,7 +87,7 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
               ? 'bg-purple-950/80 text-purple-200 border-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.5)] animate-pulse'
               : 'bg-fluent-bg-card text-fluent-text-secondary border-white/5 hover:border-purple-500/30'
           }`}
-          title={`Giữ phím '${holdKeyName}' để giảm tốc tạm thời xuống ${slowSpeed}x`}
+          title={`Giữ phím ${holdKeyName} để nghe chậm ${slowSpeed}x`}
         >
           <Zap
             className={`w-3.5 h-3.5 ${
@@ -97,11 +97,11 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
           <span className="text-[11px] font-medium">
             {isSlowHeld ? (
               <span className="font-bold text-purple-300">
-                SLOW {slowSpeed}x (Đang giữ)
+                Chậm {slowSpeed}x (Đang giữ)
               </span>
             ) : (
               <span>
-                Giữ <kbd className="px-1 py-0.5 rounded bg-black/40 text-purple-300 font-mono text-[10px]">{holdKeyName}</kbd> để Slow ({slowSpeed}x)
+                Giữ <kbd className="px-1 py-0.5 rounded bg-black/40 text-purple-300 font-mono text-[10px]">{holdKeyName}</kbd> nghe chậm ({slowSpeed}x)
               </span>
             )}
           </span>
@@ -111,13 +111,13 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
       {/* Center: A-B Repeat Section for Listening practice */}
       <div className="flex items-center gap-1.5 bg-fluent-bg-card/70 p-1 rounded-xl border border-white/5">
         <span className="text-[11px] font-semibold text-fluent-text-muted px-2 flex items-center gap-1">
-          <Repeat className="w-3 h-3 text-fluent-accent" /> A-B Loop:
+          <Repeat className="w-3 h-3 text-fluent-accent" /> Lặp đoạn:
         </span>
 
         {/* Set Point A */}
         <button
           onClick={onSetLoopA}
-          title="Đặt điểm bắt đầu A (Phím A)"
+          title="Điểm đầu (A)"
           className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] font-medium transition-all ${
             loopA > 0
               ? 'bg-fluent-accent/20 text-fluent-accent border border-fluent-accent/40 font-mono'
@@ -125,13 +125,13 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
           }`}
         >
           <Bookmark className="w-3 h-3" />
-          <span>A: {loopA > 0 ? formatTime(loopA) : 'Mốc A'}</span>
+          <span>A: {loopA > 0 ? formatTime(loopA) : 'Điểm A'}</span>
         </button>
 
         {/* Set Point B */}
         <button
           onClick={onSetLoopB}
-          title="Đặt điểm kết thúc B (Phím B)"
+          title="Điểm cuối (B)"
           className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] font-medium transition-all ${
             loopB > 0
               ? 'bg-fluent-purple/20 text-purple-300 border border-purple-500/40 font-mono'
@@ -139,7 +139,7 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
           }`}
         >
           <Bookmark className="w-3 h-3" />
-          <span>B: {loopB > 0 ? formatTime(loopB) : 'Mốc B'}</span>
+          <span>B: {loopB > 0 ? formatTime(loopB) : 'Điểm B'}</span>
         </button>
 
         {/* Toggle Loop Active */}
@@ -147,7 +147,7 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
           <>
             <button
               onClick={onToggleLoop}
-              title={isLoopActive ? 'Tắt lặp đoạn A-B (Phím L)' : 'Bật lặp đoạn A-B (Phím L)'}
+              title={isLoopActive ? 'Tắt lặp đoạn (L)' : 'Bật lặp đoạn (L)'}
               className={`px-2.5 py-1 rounded-lg flex items-center gap-1 text-[11px] font-semibold transition-all ${
                 isLoopActive
                   ? 'bg-fluent-accent text-black shadow-accent-glow font-bold'
@@ -155,12 +155,12 @@ export const ListeningControls: React.FC<ListeningControlsProps> = ({
               }`}
             >
               <Repeat className="w-3 h-3" />
-              <span>{isLoopActive ? 'Đang Lặp A-B' : 'Bật Lặp'}</span>
+              <span>{isLoopActive ? 'Đang lặp' : 'Bật lặp'}</span>
             </button>
 
             <button
               onClick={onClearLoop}
-              title="Xóa mốc A-B (Phím C)"
+              title="Hủy lặp (C)"
               className="p-1 rounded-lg hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors"
             >
               <X className="w-3.5 h-3.5" />

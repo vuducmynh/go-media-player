@@ -4,6 +4,25 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.3] - 21/09/2026
+
+# Bố cục Sidebar 2 hàng & Tinh chỉnh ngôn ngữ người dùng tự nhiên
+
+Bản cập nhật v1.3.3 tái cấu trúc toàn bộ các tab bộ lọc Sidebar thành 2 hàng gọn gàng, loại bỏ tình trạng tràn cuộn ngang gây vướng víu; đồng thời chuẩn hóa ngôn ngữ giao diện theo hướng ngắn gọn, tự nhiên, thân thiện và đặt người dùng làm trung tâm ("Tiếp tục nghe", "Nhấn giữ để nghe chậm", "Nhớ vị trí đang nghe dở").
+
+### Cải tiến (4)
+- **Bộ lọc Sidebar 2 hàng thông minh**: Sắp xếp các tab phân loại media thành 2 hàng cân đối (Hàng 1: Tiếp tục nghe & YouTube; Hàng 2: Audio, Video, Đã xong), hiển thị trọn vẹn mà không bị tràn thanh cuộn ngang trên màn hình tiêu chuẩn.
+- **Ngôn ngữ tự nhiên & thân thiện người dùng**: Thay thế các thuật ngữ kỹ thuật và developer-centric (Hold-to-Slow, Fingerprint, Smart Resume, ListenSlice...) bằng cách diễn đạt tiếng Việt súc tích, tự nhiên như "Tiếp tục nghe", "Nhấn giữ để nghe chậm", "Nhớ vị trí đang nghe dở".
+- **Tinh gọn giao diện Cài đặt (Settings)**: Bỏ cách đánh số tiêu đề (1., 2., 4., 5.), lược bỏ các dòng mô tả kỹ thuật dư thừa, tập trung vào đúng công dụng thực tế của từng tùy chọn.
+- **Chuẩn hóa Bảng phím tắt & Thanh điều khiển**: Tinh chỉnh toàn bộ mô tả phím tắt, nút bấm và chú giải công cụ (tooltips) trên thanh phát nhạc, chế độ Luyện sâu và quản lý mô hình AI.
+
+### Sửa lỗi (1)
+- **Khắc phục tình trạng các tab Sidebar bị che khuất**: Bố cục 2 hàng giúp người dùng chọn ngay nguồn nghe mong muốn chỉ với 1 cú nhấp chuột mà không cần phải rê chuột cuộn ngang.
+
+### Bản vá (0)
+
+---
+
 ## [v1.3.2] - 21/09/2026
 
 # Ghi nhớ tiến trình YouTube & Lưu trữ bài học Luyện nghe sâu bền vững

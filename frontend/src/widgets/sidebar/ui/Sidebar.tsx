@@ -323,7 +323,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-b border-white/5 bg-fluent-bg-card/40">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fluent-text-muted flex items-center gap-1">
-            <Layers className="w-3.5 h-3.5 text-fluent-accent" /> Nguồn phát:
+            <Layers className="w-3.5 h-3.5 text-fluent-accent" /> Danh mục:
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -592,58 +592,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Category Filters in strict order: Đang nghe -> Audio -> YouTube -> Video -> Đã xong */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-thin">
-          <button
-            onClick={() => onFilterChange('in_progress')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-              activeFilter === 'in_progress'
-                ? 'bg-amber-500/25 text-amber-300 font-semibold border border-amber-500/40 shadow-sm'
-                : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Clock className="w-3 h-3 text-amber-400" /> Đang nghe ({inProgressCount})
-          </button>
-          <button
-            onClick={() => onFilterChange('audio')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-              activeFilter === 'audio'
-                ? 'bg-fluent-accent text-black font-bold shadow-sm'
-                : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Music className="w-3 h-3" /> Audio ({audioCount})
-          </button>
-          <button
-            onClick={() => onFilterChange('youtube')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-              activeFilter === 'youtube'
-                ? 'bg-red-600 text-white font-bold shadow-sm shadow-red-600/30'
-                : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Youtube className="w-3 h-3 text-red-400" /> YouTube ({youtubeCount})
-          </button>
-          <button
-            onClick={() => onFilterChange('video')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-              activeFilter === 'video'
-                ? 'bg-purple-600 text-white font-bold shadow-sm'
-                : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Film className="w-3 h-3" /> Video ({videoCount})
-          </button>
-          <button
-            onClick={() => onFilterChange('completed')}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-              activeFilter === 'completed'
-                ? 'bg-emerald-500/25 text-emerald-300 font-semibold border border-emerald-500/40 shadow-sm'
-                : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Đã xong ({completedCount})
-          </button>
+        {/* Category Filters: 2 neat rows, overflow-x-auto if space is constrained */}
+        <div className="flex flex-col gap-1.5 pt-0.5">
+          {/* Row 1: Resume / In-progress & YouTube */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => onFilterChange('in_progress')}
+              className={`flex-1 min-w-fit px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+                activeFilter === 'in_progress'
+                  ? 'bg-amber-500/25 text-amber-300 font-semibold border border-amber-500/40 shadow-sm'
+                  : 'bg-white/[0.04] text-fluent-text-secondary hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Tiếp tục nghe ({inProgressCount})</span>
+            </button>
+            <button
+              onClick={() => onFilterChange('youtube')}
+              className={`flex-1 min-w-fit px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+                activeFilter === 'youtube'
+                  ? 'bg-red-600 text-white font-bold border border-red-500 shadow-sm shadow-red-600/30'
+                  : 'bg-white/[0.04] text-fluent-text-secondary hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+            >
+              <Youtube className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span>YouTube ({youtubeCount})</span>
+            </button>
+          </div>
+
+          {/* Row 2: Audio, Video, Completed */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => onFilterChange('audio')}
+              className={`flex-1 min-w-fit px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 shadow-sm ${
+                activeFilter === 'audio'
+                  ? 'bg-fluent-accent text-black font-bold border border-fluent-accent shadow-sm'
+                  : 'bg-white/[0.04] text-fluent-text-secondary hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+            >
+              <Music className="w-3 h-3 shrink-0" />
+              <span>Audio ({audioCount})</span>
+            </button>
+            <button
+              onClick={() => onFilterChange('video')}
+              className={`flex-1 min-w-fit px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 shadow-sm ${
+                activeFilter === 'video'
+                  ? 'bg-purple-600 text-white font-bold border border-purple-500 shadow-sm'
+                  : 'bg-white/[0.04] text-fluent-text-secondary hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+            >
+              <Film className="w-3 h-3 shrink-0" />
+              <span>Video ({videoCount})</span>
+            </button>
+            <button
+              onClick={() => onFilterChange('completed')}
+              className={`flex-1 min-w-fit px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 shadow-sm ${
+                activeFilter === 'completed'
+                  ? 'bg-emerald-500/25 text-emerald-300 font-semibold border border-emerald-500/40 shadow-sm'
+                  : 'bg-white/[0.04] text-fluent-text-secondary hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+              <span>Đã xong ({completedCount})</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -652,15 +664,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300">
           <span className="flex items-center gap-1.5 font-medium">
             <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>Đang nghe ({currentFolderFiles.length}) • Gần đây nhất lên đầu</span>
+            <span>Tiếp tục nghe ({currentFolderFiles.length})</span>
           </span>
           {currentFolderFiles.length > 0 && onClearAllProgress && (
             <button
               onClick={onClearAllProgress}
               className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-semibold transition-colors flex items-center gap-1"
-              title="Xóa toàn bộ tiến trình đang nghe"
+              title="Xóa danh sách nghe tiếp"
             >
-              <Trash2 className="w-2.5 h-2.5" /> Dọn tất cả
+              <Trash2 className="w-2.5 h-2.5" /> Xóa danh sách
             </button>
           )}
         </div>
@@ -678,18 +690,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={onOpenAddYouTube}
                   className="mt-3 px-3 py-1 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs transition-colors"
                 >
-                  + Nhúng link YouTube ngay
+                  + Thêm video YouTube
                 </button>
               </>
             ) : (
               <>
                 <FolderOpen className="w-10 h-10 text-white/10 mb-3" />
                 {settings.folders.length === 0 ? (
-                  <p>Chưa có thư mục nào. Nhấn "+ Thêm" ở trên để chọn thư mục media.</p>
+                  <p>Chưa có thư mục nào. Nhấn "+ Thêm" ở trên để chọn thư mục.</p>
                 ) : activeFilter === 'in_progress' ? (
-                  <p>Danh sách đang nghe trống. Bạn chưa nghe dở file nào.</p>
+                  <p>Chưa có bài nào đang nghe dở.</p>
                 ) : (
-                  <p>Không có file nào trong thư mục này phù hợp với bộ lọc.</p>
+                  <p>Không có tệp nào phù hợp.</p>
                 )}
               </>
             )}
@@ -847,7 +859,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               e.stopPropagation();
                               onRemoveYouTubeVideo(file.youtubeId || file.id);
                             }}
-                            title="Xóa video YouTube khỏi danh sách"
+                            title="Xóa khỏi danh sách"
                             className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -862,7 +874,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               e.stopPropagation();
                               onClearFileProgress(file.fingerprint);
                             }}
-                            title="Dọn dẹp: Xóa khỏi danh sách đang nghe (đặt lại tiến trình)"
+                            title="Xóa khỏi danh sách nghe tiếp"
                             className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -900,7 +912,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       )}
                       {lessonFingerprints?.has(file.fingerprint) && (
                         <span
-                          title="Đã có bài học Luyện nghe sâu - bấm để tiếp tục học"
+                          title="Đã có bài luyện nghe sâu"
                           className="px-1 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[9px] shrink-0 font-semibold flex items-center gap-0.5 shadow-sm"
                         >
                           ✨ Luyện sâu

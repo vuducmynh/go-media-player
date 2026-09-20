@@ -90,7 +90,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Gauge className="w-4 h-4" />
             </div>
             <h2 className="text-sm font-bold text-white tracking-wide">
-              Cài đặt ứng dụng & Bộ điều khiển
+              Cài đặt
             </h2>
           </div>
           <button
@@ -102,35 +102,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <div className="p-5 overflow-y-auto space-y-5 text-xs flex-1">
-          {/* Section 1: Hold-to-Slow feature (Unified and completely clear) */}
+        <div className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
+          {/* Section 1: Hold-to-Slow feature */}
           <div className="bg-fluent-bg-card p-4 rounded-xl border border-purple-500/25 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Zap className="w-4 h-4 text-purple-400" />
-                1. Tính năng Giữ phím để giảm tốc (Hold-to-Slow)
+                Nhấn giữ để nghe chậm
               </h3>
               <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 text-[10px] font-semibold border border-purple-500/30">
-                Luyện Listening
+                Luyện nghe
               </span>
             </div>
 
             <p className="text-[11px] text-fluent-text-secondary leading-relaxed">
-              Khi nghe đoạn khó hoặc câu phát âm nhanh, bạn chỉ cần <strong className="text-white">nhấn giữ một phím</strong> để audio/video chạy chậm lại. Khi <strong className="text-white">thả phím</strong> ra, tốc độ sẽ lập tức quay trở lại bình thường.
+              Nhấn giữ phím để giảm tốc độ khi nghe câu khó, thả phím để phát lại bình thường.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               {/* Hold Key Selection */}
               <div className="bg-fluent-bg-dark/80 p-2.5 rounded-lg border border-white/5">
                 <label className="block text-fluent-text-secondary font-medium mb-1.5">
-                  Phím dùng để nhấn giữ:
+                  Phím nhấn giữ:
                 </label>
                 <select
                   value={formData.holdSlowKey}
                   onChange={(e) => handleChange('holdSlowKey', e.target.value)}
                   className="w-full px-2.5 py-1.5 bg-fluent-bg-card border border-white/10 rounded-lg text-white font-medium focus:outline-none focus:border-purple-400 cursor-pointer"
                 >
-                  <option value="KeyS">Phím S (Khuyên dùng)</option>
+                  <option value="KeyS">Phím S (Mặc định)</option>
                   <option value="ShiftLeft">Phím Shift</option>
                   <option value="ControlLeft">Phím Ctrl</option>
                   <option value="AltLeft">Phím Alt</option>
@@ -140,7 +140,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Slow Speed Selection */}
               <div className="bg-fluent-bg-dark/80 p-2.5 rounded-lg border border-white/5">
                 <label className="block text-fluent-text-secondary font-medium mb-1.5">
-                  Mức tốc độ khi đang giữ phím:
+                  Tốc độ khi giữ:
                 </label>
                 <select
                   value={formData.slowSpeed}
@@ -149,11 +149,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }
                   className="w-full px-2.5 py-1.5 bg-fluent-bg-card border border-white/10 rounded-lg text-white font-mono focus:outline-none focus:border-purple-400 cursor-pointer"
                 >
-                  <option value="0.25">0.25x (Rất chậm - 1/4 tốc độ)</option>
-                  <option value="0.4">0.4x (Chậm)</option>
-                  <option value="0.5">0.5x (Chuẩn luyện nghe - 1/2 tốc độ)</option>
-                  <option value="0.6">0.6x (Vừa phải)</option>
-                  <option value="0.75">0.75x (Chậm nhẹ)</option>
+                  <option value="0.25">0.25x</option>
+                  <option value="0.4">0.4x</option>
+                  <option value="0.5">0.5x (Khuyên dùng)</option>
+                  <option value="0.6">0.6x</option>
+                  <option value="0.75">0.75x</option>
                   <option value="0.8">0.8x</option>
                 </select>
               </div>
@@ -161,9 +161,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Quick summary badge */}
             <div className="flex items-center gap-1.5 text-[11px] text-purple-300/90 bg-purple-950/40 px-3 py-1.5 rounded-lg border border-purple-500/20 font-mono">
-              <span>👉 Thiết lập hiện tại:</span>
-              <span className="font-bold text-white">Giữ {currentHoldKeyLabel}</span>
-              <span>sẽ giảm tốc về</span>
+              <span>👉 Giữ {currentHoldKeyLabel} để giảm tốc về</span>
               <span className="font-bold text-purple-300">{formData.slowSpeed}x</span>
             </div>
           </div>
@@ -174,10 +172,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="bg-fluent-bg-card p-4 rounded-xl border border-white/5 space-y-2">
               <h3 className="text-xs font-bold text-fluent-accent uppercase tracking-wider flex items-center gap-1.5">
                 <FastForward className="w-4 h-4 text-fluent-accent" />
-                2. Khoảng thời gian tua (giây)
+                Bước tua (giây)
               </h3>
               <p className="text-[10px] text-fluent-text-muted">
-                Số giây nhảy khi bấm phím Mũi tên Trái / Phải (← / →):
+                Khoảng tua khi bấm phím ← hoặc →:
               </p>
               <div className="flex items-center gap-2 pt-1">
                 <input
@@ -214,10 +212,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="bg-fluent-bg-card p-4 rounded-xl border border-white/5 space-y-2">
               <h3 className="text-xs font-bold text-fluent-accent uppercase tracking-wider flex items-center gap-1.5">
                 <Gauge className="w-4 h-4 text-fluent-accent" />
-                3. Tốc độ phát thông thường
+                Tốc độ mặc định
               </h3>
               <p className="text-[10px] text-fluent-text-muted">
-                Tốc độ phát gốc khi mở bài mới (bình thường là 1.0x):
+                Tốc độ khi mở bài mới:
               </p>
               <div className="pt-1">
                 <select
@@ -227,10 +225,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }
                   className="w-full px-2.5 py-1.5 bg-fluent-bg-dark border border-white/10 rounded-lg text-white font-mono focus:outline-none focus:border-fluent-accent cursor-pointer"
                 >
-                  <option value="0.75">0.75x (Nghe chậm toàn bài)</option>
-                  <option value="1.0">1.0x (Tốc độ gốc chuẩn)</option>
-                  <option value="1.25">1.25x (Nhanh hơn 25%)</option>
-                  <option value="1.5">1.5x (Nhanh hơn 50%)</option>
+                  <option value="0.75">0.75x</option>
+                  <option value="1.0">1.0x (Chuẩn)</option>
+                  <option value="1.25">1.25x</option>
+                  <option value="1.5">1.5x</option>
                 </select>
               </div>
             </div>
@@ -240,16 +238,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-fluent-bg-card p-4 rounded-xl border border-white/5 space-y-3">
             <h3 className="text-xs font-bold text-fluent-text-secondary uppercase tracking-wider flex items-center gap-1.5">
               <BookmarkCheck className="w-4 h-4 text-fluent-accent" />
-              4. Ghi nhớ tiến trình phát
+              Tiến trình & Tự động phát
             </h3>
             <div className="space-y-2.5 divide-y divide-white/5">
               <label className="flex items-center justify-between cursor-pointer pt-1">
                 <div>
                   <span className="font-medium text-white block text-xs">
-                    Smart Resume (Nhận diện file qua Fingerprint)
+                    Nhớ vị trí đang nghe dở
                   </span>
                   <span className="text-[10px] text-fluent-text-muted">
-                    Tự động nhớ vị trí đang nghe dở, kể cả khi đổi tên file hoặc chuyển thư mục.
+                    Tự động mở tiếp mốc thời gian nghe dở từ lần trước.
                   </span>
                 </div>
                 <input
@@ -263,10 +261,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <label className="flex items-center justify-between cursor-pointer pt-2.5">
                 <div>
                   <span className="font-medium text-white block text-xs">
-                    Tự động phát tiếp file kế tiếp
+                    Tự động phát bài tiếp theo
                   </span>
                   <span className="text-[10px] text-fluent-text-muted">
-                    Khi một file phát hết, tự động chuyển sang file tiếp theo trong danh sách.
+                    Chuyển sang bài kế tiếp trong danh sách khi phát hết.
                   </span>
                 </div>
                 <input
@@ -284,7 +282,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-fluent-text-secondary uppercase tracking-wider flex items-center gap-1.5">
                 <Folder className="w-4 h-4 text-fluent-accent" />
-                5. Vị trí thư mục media ({formData.folders.length})
+                Thư mục media ({formData.folders.length})
               </h3>
               <button
                 type="button"
@@ -316,7 +314,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       type="button"
                       onClick={() => onRemoveFolder(folder)}
                       className="p-1 hover:text-red-400 text-fluent-text-muted transition-colors shrink-0"
-                      title="Xóa thư mục khỏi quản lý"
+                      title="Xóa thư mục"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -330,10 +328,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-fluent-bg-card p-4 rounded-xl border border-white/5 flex items-center justify-between">
             <div>
               <h3 className="text-xs font-bold text-fluent-text-secondary uppercase tracking-wider">
-                5. Phiên bản ứng dụng
+                Phiên bản
               </h3>
               <p className="text-[11px] text-fluent-text-muted mt-0.5">
-                Go Audio & Video Player (Windows 11) •{' '}
+                Go Audio Player •{' '}
                 <span className="text-emerald-400 font-mono font-semibold">
                   {currentVersion || 'v1.0.0'}
                 </span>
@@ -375,7 +373,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onClick={handleSave}
               className="flex items-center gap-1.5 px-5 py-1.5 rounded-lg bg-fluent-accent hover:bg-fluent-accent-hover text-black font-semibold text-xs shadow-accent-glow transition-all active:scale-95"
             >
-              <Save className="w-3.5 h-3.5" /> Lưu cài đặt
+              <Save className="w-3.5 h-3.5" /> Lưu
             </button>
           </div>
         </div>

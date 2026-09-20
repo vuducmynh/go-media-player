@@ -735,9 +735,9 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         <div className="w-24 h-24 rounded-3xl bg-fluent-bg-card border border-white/10 flex items-center justify-center shadow-fluent mb-6">
           <Headphones className="w-12 h-12 text-fluent-accent animate-pulse-subtle" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">Chưa chọn nội dung phát</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">Chọn bài để bắt đầu</h2>
         <p className="text-sm text-fluent-text-secondary max-w-md mb-6">
-          Chọn một file Audio, Video hoặc nhúng video YouTube để bắt đầu nghe & luyện phát âm với các tính năng Hold-to-slow và A-B loop.
+          Chọn một bài audio, video hoặc dán link YouTube để bắt đầu nghe và luyện phát âm.
         </p>
       </div>
     );
@@ -772,7 +772,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         {isYouTube && ytPlayer.isLoading && (
           <div className="absolute top-4 left-4 z-20 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/80 backdrop-blur-md border border-white/10 text-white text-xs shadow-lg animate-fade-in">
             <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-            <span>Đang tải video YouTube...</span>
+            <span>Đang tải video...</span>
           </div>
         )}
 
@@ -780,7 +780,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         {isYouTube && ytPlayer.isBuffering && !ytPlayer.isLoading && (
           <div className="absolute top-4 right-4 z-20 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/80 backdrop-blur-md border border-white/10 text-white text-xs shadow-lg animate-fade-in">
             <div className="w-3.5 h-3.5 border-2 border-fluent-accent border-t-transparent rounded-full animate-spin" />
-            <span>Đang nạp đệm...</span>
+            <span>Đang tải dữ liệu...</span>
           </div>
         )}
 
@@ -1012,7 +1012,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                         setIsQualityMenuOpen(!isQualityMenuOpen);
                       }}
                       className="px-1.5 py-0.5 rounded bg-red-600/20 hover:bg-red-600/30 active:scale-95 text-red-400 border border-red-500/30 text-[9px] font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 transition-all cursor-pointer shadow-sm"
-                      title="Chất lượng video: Nhấp để xem các mức khả dụng và chọn độ phân giải"
+                      title="Chất lượng video"
                     >
                       <Sliders className="w-2.5 h-2.5 text-red-400" />
                       <span>{getQualityDisplayName(ytPlayer.currentQuality)}</span>
@@ -1027,8 +1027,8 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                     {isQualityMenuOpen && (
                       <div className="absolute bottom-full mb-2 left-0 w-48 bg-fluent-bg-darker border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in text-xs">
                         <div className="px-2 py-1 text-[9px] font-semibold text-fluent-text-muted uppercase tracking-wider border-b border-white/5 mb-1 flex items-center justify-between">
-                          <span>Độ phân giải video</span>
-                          <span className="text-red-400 font-normal">Tối ưu 1080p</span>
+                          <span>Độ phân giải</span>
+                          <span className="text-red-400 font-normal">Tự động tối ưu</span>
                         </div>
                         {ytPlayer.availableQualities.length === 0 ? (
                           <div className="px-2 py-1.5 text-[10px] text-fluent-text-muted">
@@ -1069,7 +1069,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
           <div className="flex items-center gap-4">
             <button
               onClick={onPlayPrev}
-              title="File trước đó"
+              title="Bài trước"
               className="p-2 rounded-full hover:bg-white/10 text-fluent-text-secondary hover:text-white transition-all active:scale-95"
             >
               <SkipBack className="w-5 h-5" />
@@ -1078,7 +1078,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             {/* Main Play/Pause Button */}
             <button
               onClick={handleTogglePlay}
-              title={activeIsPlaying ? 'Tạm dừng (Phím Space)' : 'Phát (Phím Space)'}
+              title={activeIsPlaying ? 'Tạm dừng (Space)' : 'Phát (Space)'}
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 hover:scale-105 ${
                 isYouTube
                   ? 'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white shadow-lg shadow-red-600/30'
@@ -1094,7 +1094,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
             <button
               onClick={onPlayNext}
-              title="File kế tiếp"
+              title="Bài tiếp theo"
               className="p-2 rounded-full hover:bg-white/10 text-fluent-text-secondary hover:text-white transition-all active:scale-95"
             >
               <SkipForward className="w-5 h-5" />
@@ -1114,7 +1114,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             <div className="flex items-center">
               <button
                 onClick={handleOpenStudyMode}
-                title="Luyện nghe sâu theo câu (ListenSlice: Listen / Dictation / Shadow / Review)"
+                title="Luyện nghe sâu từng câu"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-l-xl bg-gradient-to-r from-fluent-accent/20 to-purple-500/20 hover:from-fluent-accent/30 hover:to-purple-500/30 text-fluent-accent border border-fluent-accent/40 text-xs font-semibold shadow-sm transition-all active:scale-95 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -1122,7 +1122,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
               </button>
               <button
                 onClick={() => setIsModelManagerOpen(true)}
-                title="Quản lý Mô hình AI Whisper & Tăng tốc GPU (NVIDIA CUDA / CPU Đa luồng)"
+                title="Cài đặt mô hình AI Whisper & Tăng tốc"
                 className="p-1.5 rounded-r-xl bg-fluent-accent/10 hover:bg-fluent-accent/25 text-fluent-accent border-y border-r border-fluent-accent/40 text-xs transition-all cursor-pointer"
               >
                 <Cpu className="w-3.5 h-3.5" />
@@ -1133,7 +1133,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             <div className="flex items-center gap-2 group">
               <button
                 onClick={handleToggleMute}
-                title={activeIsMuted ? 'Bật âm thanh (Phím M)' : 'Tắt âm thanh (Phím M)'}
+                title={activeIsMuted ? 'Bật âm thanh (M)' : 'Tắt tiếng (M)'}
                 className="p-1.5 rounded-lg hover:bg-white/10 text-fluent-text-secondary hover:text-white transition-colors"
               >
                 {activeIsMuted || activeVolume === 0 ? (
@@ -1159,7 +1159,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             {/* Open Containing Folder or YouTube Link */}
             <button
               onClick={() => onOpenFileFolder(currentFile.path)}
-              title={isYouTube ? 'Mở video trên trình duyệt' : 'Mở thư mục chứa file trong Explorer'}
+              title={isYouTube ? 'Mở trên YouTube' : 'Mở thư mục chứa file'}
               className="p-1.5 rounded-lg hover:bg-white/10 text-fluent-text-secondary hover:text-white transition-colors"
             >
               {isYouTube ? <ExternalLink className="w-4 h-4 text-red-400" /> : <FolderOpen className="w-4 h-4" />}
@@ -1169,7 +1169,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             {(currentFile.type === 'video' || isYouTube) && (
               <button
                 onClick={toggleFullscreen}
-                title="Toàn màn hình (Phím F hoặc nhấp đúp)"
+                title="Toàn màn hình (F)"
                 className="p-1.5 rounded-lg hover:bg-white/10 text-fluent-text-secondary hover:text-white transition-colors"
               >
                 {isFullscreen ? (
