@@ -23,6 +23,7 @@ import {
   Check,
   Sparkles,
   Cpu,
+  RotateCcw,
 } from 'lucide-react';
 import { MediaFile, AppSettings } from '../../../entities/media/types';
 import { formatTime } from '../../../shared/lib/formatters';
@@ -86,6 +87,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const [isStudyModeOpen, setIsStudyModeOpen] = useState<boolean>(false);
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [isModelManagerOpen, setIsModelManagerOpen] = useState<boolean>(false);
+  const [isRemakeMode, setIsRemakeMode] = useState<boolean>(false);
   const [isProcessingLesson, setIsProcessingLesson] = useState<boolean>(false);
   const [processingPercentage, setProcessingPercentage] = useState<number>(0);
   const [processingStatus, setProcessingStatus] = useState<string>('Đang phân tích âm thanh và phân đoạn câu...');
@@ -146,7 +148,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const activeVolume = isYouTube ? ytPlayer.volume : volume;
   const activeIsMuted = isYouTube ? ytPlayer.isMuted : isMuted;
 
-  // When current file changes, restore saved state and A-B loop points
+  // When current file changes, restore saved state, A-B loop points, and existing lesson
   useEffect(() => {
     setIsStudyModeOpen(false);
     setCurrentLesson(null);
@@ -164,6 +166,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     setLoopA(currentFile.loopA || 0);
     setLoopB(currentFile.loopB || 0);
     setIsLoopActive(Boolean(currentFile.loopA && currentFile.loopB && currentFile.loopB > currentFile.loopA));
+
+    // Check if file already has an existing lesson
+    WailsBridge.getLesson(currentFile.fingerprint)
+      .then((l) => {
+        if (l && l.sentences && l.sentences.length > 0) {
+          setCurrentLesson(l);
+        }
+      })
+      .catch(() => {});
 
     if (!isYouTube) {
       const media = mediaRef.current;
@@ -868,6 +879,10 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                 );
               }
             }}
+            onRemakeLesson={() => {
+              setIsRemakeMode(true);
+              setIsModelManagerOpen(true);
+            }}
             onSaveAttempt={handleSaveAttempt}
             onToggleStar={handleToggleStar}
             onMarkDifficult={handleMarkDifficult}
@@ -1110,7 +1125,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
           {/* Right: Volume & Utility Actions */}
           <div className="flex items-center gap-3">
-            {/* Luyện sâu (ListenSlice) Action Button with Model Config */}
+            {/* Luyện sâu (ListenSlice) Action Button with Model Config / Remake */}
             <div className="flex items-center">
               <button
                 onClick={handleOpenStudyMode}
@@ -1120,13 +1135,29 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Luyện sâu</span>
               </button>
-              <button
-                onClick={() => setIsModelManagerOpen(true)}
-                title="Cài đặt mô hình AI Whisper & Tăng tốc"
-                className="p-1.5 rounded-r-xl bg-fluent-accent/10 hover:bg-fluent-accent/25 text-fluent-accent border-y border-r border-fluent-accent/40 text-xs transition-all cursor-pointer"
-              >
-                <Cpu className="w-3.5 h-3.5" />
-              </button>
+              {currentLesson && currentLesson.sentences && currentLesson.sentences.length > 0 ? (
+                <button
+                  onClick={() => {
+                    setIsRemakeMode(true);
+                    setIsModelManagerOpen(true);
+                  }}
+                  title="Tạo lại / Phân tích lại bài học (Remake bằng AI Whisper)"
+                  className="p-1.5 rounded-r-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-y border-r border-amber-500/40 text-xs transition-all cursor-pointer flex items-center justify-center"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setIsRemakeMode(false);
+                    setIsModelManagerOpen(true);
+                  }}
+                  title="Cài đặt mô hình AI Whisper & Tăng tốc"
+                  className="p-1.5 rounded-r-xl bg-fluent-accent/10 hover:bg-fluent-accent/25 text-fluent-accent border-y border-r border-fluent-accent/40 text-xs transition-all cursor-pointer flex items-center justify-center"
+                >
+                  <Cpu className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Volume Control */}
@@ -1188,8 +1219,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       {/* Whisper Model Downloader Modal */}
       <ModelManagerModal
         isOpen={isModelManagerOpen}
-        onClose={() => setIsModelManagerOpen(false)}
-        onSelectModelAndStart={handleStartTranscription}
+        onClose={() => {
+          setIsModelManagerOpen(false);
+          setIsRemakeMode(false);
+        }}
+        onSelectModelAndStart={(modelId) => {
+          setIsRemakeMode(false);
+          handleStartTranscription(modelId);
+        }}
+        isRemake={isRemakeMode}
       />
 
       {/* Sentence Segmentation Progress Modal */}

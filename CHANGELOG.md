@@ -4,6 +4,22 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.5] - 21/09/2026
+
+# Khắc phục lỗi tách rời từ ngữ AI Whisper (BPE Tokenizer Fix), Làm sạch chính tả & Tính năng Tạo lại bài học (Remake AI)
+
+Bản cập nhật v1.3.5 giải quyết triệt để sự cố các từ ghép tiếng Anh bị tách rời thành từng mẩu vụn và dấu câu bị lỗi khoảng trắng khi nhận diện bằng AI Whisper; đồng thời bổ sung cơ chế làm sạch văn bản thông minh (on-the-fly & export sanitizer) và tính năng Tạo lại bài học (Remake) cho phép phân tích lại nội dung với mô hình AI khác chất lượng hơn.
+
+### Cải tiến & Khắc phục lỗi (4)
+- **Khắc phục lỗi tách từ Byte-Pair Encoding (BPE Tokenizer Fix)**: Whisper chia cắt từ ngữ theo các token BPE (ví dụ `compreh` + `ensible`, `vacuum` + `ing`, `ch` + `ores`, `do` + `ork` + `n` + `ob`). Hệ thống đã được nâng cấp để nhận diện chính xác token bắt đầu từ và tự động dán liền các sub-word/hậu tố/dấu câu vào từ gốc, bảo đảm văn bản trôi chảy tự nhiên 100% và thời lượng từ (`WordTiming`) chính xác tuyệt đối.
+- **Bộ lọc làm sạch văn phong & chính tả tự động**: Tự động nhận diện và ghép các phụ âm rời rạc (`m owing` -> `mowing`, `r ake` -> `rake`), số thứ tự (`21 st` -> `21st`), từ viết tắt (`I 'm` -> `I'm`, `don 't` -> `don't`), từ ghép nối (`flip-flops`) và xóa bỏ khoảng trắng bất thường trước dấu chấm, phẩy, hỏi, than (`Hello .` -> `Hello.`).
+- **Tự động làm sạch bài học cũ ngay khi tải lên (On-the-fly Sanitization)**: Mọi bài học đã được phân tích trước đây sẽ được tự động làm sạch chính tả và dấu câu ngay khi hiển thị lên giao diện hoặc xuất ra Markdown mà không cần phải phân tích lại từ đầu.
+- **Tính năng Tạo lại bài học bằng AI (Remake AI)**: 
+  - Thêm nút "Tạo lại" (`RotateCcw`) nổi bật trực tiếp trên thanh công cụ Luyện sâu.
+  - Nút biểu tượng bên cạnh "Luyện sâu" trên thanh phát nhạc sẽ tự động biến thành nút xoay `RotateCcw` màu hổ phách khi tệp đã có bài học phân tích sẵn, giúp người dùng dễ dàng đổi mô hình AI cao cấp hơn hoặc phân tích lại bài học chỉ với 1 thao tác.
+
+---
+
 ## [v1.3.4] - 21/09/2026
 
 # Tùy biến thanh bên, Logo trang chủ & Tối ưu hiển thị tệp tin cùng thang đo mô hình AI

@@ -3,6 +3,7 @@ package whisper
 import (
 	"regexp"
 	"strings"
+	"unicode"
 
 	"go-audio-play/internal/domain/study"
 )
@@ -12,6 +13,14 @@ var (
 	abbrevRegex = regexp.MustCompile(`(?i)\b(?:mr|mrs|ms|dr|prof|sr|jr|vs|etc|e\.g|i\.e|no|u\.s|u\.k|st|approx)\.$`)
 	// Sentence ending punctuation
 	sentenceEndRegex = regexp.MustCompile(`[.!?]+["']?$`)
+
+	// Cleaning regexes for Whisper ASR artifacts
+	spacesBeforePunctRegex = regexp.MustCompile(`\s+([,.:;?!])`)
+	spacesAroundAposRegex  = regexp.MustCompile(`\b([A-Za-z]+)\s+['’]([A-Za-z]+)\b`)
+	spacesOrdinalsRegex    = regexp.MustCompile(`(?i)\b(\d+)\s+(st|nd|rd|th)\b`)
+	spacesHyphenRegex      = regexp.MustCompile(`\b([A-Za-z]+)\s+-\s+([A-Za-z]+)\b`)
+	singleConsonantPrefix  = regexp.MustCompile(`(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b`)
+	punctPunctSpacingRegex = regexp.MustCompile(`([,.:;?!])([A-Za-z0-9])`)
 )
 
 // WhisperJSONOutput represents the output structure produced by whisper-cli -ojf
@@ -63,7 +72,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 	var currentEndMs int64 = 0
 
 	finalizeSentence := func() {
-		text := strings.TrimSpace(currentText.String())
+		text := CleanTranscriptText(currentText.String())
 		if text == "" || len(currentWords) == 0 {
 			currentWords = nil
 			currentText.Reset()
@@ -82,7 +91,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 		// Safety check: if sentence is just 1 short word and previous sentence exists, merge with previous
 		if len(sentences) > 0 && len(currentWords) <= 2 && (currentEndMs-currentStartMs) < 1200 {
 			prevIdx := len(sentences) - 1
-			sentences[prevIdx].Transcript += " " + text
+			sentences[prevIdx].Transcript = CleanTranscriptText(sentences[prevIdx].Transcript + " " + text)
 			sentences[prevIdx].EndMs = currentEndMs
 			sentences[prevIdx].Words = append(sentences[prevIdx].Words, currentWords...)
 		} else {
@@ -109,11 +118,11 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 			continue
 		}
 
-		// If tokens exist with offsets, build words from tokens
+		// If tokens exist with offsets, assemble BPE tokens into proper whole words
 		if len(seg.Tokens) > 0 {
 			for _, tok := range seg.Tokens {
 				cleanToken := strings.TrimSpace(tok.Text)
-				if cleanToken == "" || strings.HasPrefix(cleanToken, "[_") {
+				if cleanToken == "" || strings.HasPrefix(cleanToken, "[_") || strings.HasPrefix(cleanToken, "<|") {
 					continue
 				}
 
@@ -122,35 +131,73 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 				}
 				currentEndMs = tok.Offsets.To
 
-				if currentText.Len() > 0 && !strings.HasPrefix(tok.Text, " ") && !strings.HasPrefix(tok.Text, "'") {
-					currentText.WriteString(" ")
-				} else if currentText.Len() > 0 && strings.HasPrefix(tok.Text, " ") {
-					currentText.WriteString(" ")
-				}
-				currentText.WriteString(cleanToken)
+				isWordStart := strings.HasPrefix(tok.Text, " ")
+				isPunct := isPunctuationOnly(cleanToken)
+				isContr := isContraction(cleanToken)
 
-				currentWords = append(currentWords, study.WordTiming{
-					Text:       cleanToken,
-					StartMs:    tok.Offsets.From,
-					EndMs:      tok.Offsets.To,
-					Confidence: tok.Prob,
-				})
+				if isPunct {
+					// Punctuation attaches directly without leading space (e.g. "Hello" + "." -> "Hello.")
+					currentText.WriteString(cleanToken)
+					if len(currentWords) > 0 {
+						currentWords[len(currentWords)-1].Text += cleanToken
+						currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
+					}
+					// Check if this punctuation terminates a sentence
+					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
+						finalizeSentence()
+					}
+				} else if isContr {
+					// Contraction suffix attaches directly without space (e.g. "I" + "'m" -> "I'm")
+					currentText.WriteString(cleanToken)
+					if len(currentWords) > 0 {
+						currentWords[len(currentWords)-1].Text += cleanToken
+						currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
+					} else {
+						currentWords = append(currentWords, study.WordTiming{
+							Text:       cleanToken,
+							StartMs:    tok.Offsets.From,
+							EndMs:      tok.Offsets.To,
+							Confidence: tok.Prob,
+						})
+					}
+				} else if !isWordStart && currentText.Len() > 0 && len(currentWords) > 0 {
+					// BPE sub-word continuation (e.g. "compreh" + "ensible" -> "comprehensible", "vacuum" + "ing" -> "vacuuming")
+					currentText.WriteString(cleanToken)
+					currentWords[len(currentWords)-1].Text += cleanToken
+					currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
+					if tok.Prob < currentWords[len(currentWords)-1].Confidence {
+						currentWords[len(currentWords)-1].Confidence = tok.Prob
+					}
+				} else {
+					// New word start!
+					if currentText.Len() > 0 {
+						currentText.WriteString(" ")
+					}
+					currentText.WriteString(cleanToken)
+					currentWords = append(currentWords, study.WordTiming{
+						Text:       cleanToken,
+						StartMs:    tok.Offsets.From,
+						EndMs:      tok.Offsets.To,
+						Confidence: tok.Prob,
+					})
 
-				// Check if this token terminates a sentence
-				if isSentenceEnd(cleanToken) && len(currentWords) >= 3 {
-					finalizeSentence()
+					// Check if this word terminates a sentence (e.g. " 2.", " now.", " world!")
+					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
+						finalizeSentence()
+					}
 				}
 			}
 		} else {
 			// Fallback if tokens array was empty: treat segment as a unit
+			cleanSeg := CleanTranscriptText(segText)
 			if currentStartMs < 0 {
 				currentStartMs = seg.Offsets.From
 			}
 			currentEndMs = seg.Offsets.To
-			currentText.WriteString(segText)
+			currentText.WriteString(cleanSeg)
 
 			// Simple word approximation
-			words := strings.Fields(segText)
+			words := strings.Fields(cleanSeg)
 			duration := seg.Offsets.To - seg.Offsets.From
 			wordDur := duration / int64(max(1, len(words)))
 			for i, w := range words {
@@ -215,6 +262,64 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 	}
 
 	return cleaned
+}
+
+func isPunctuationOnly(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return false
+	}
+	for _, r := range trimmed {
+		if !unicode.IsPunct(r) && !unicode.IsSymbol(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isContraction(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return strings.HasPrefix(trimmed, "'") || strings.HasPrefix(trimmed, "’") || strings.EqualFold(trimmed, "n't")
+}
+
+// CleanTranscriptText cleans up spacing, punctuation and typography artifacts from ASR transcriptions
+func CleanTranscriptText(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+
+	// 1. Remove spaces before punctuation (, . ? ! ; : )
+	text = spacesBeforePunctRegex.ReplaceAllString(text, "$1")
+
+	// 2. Fix spaces around apostrophes (e.g. "I 'm" -> "I'm", "don 't" -> "don't")
+	text = spacesAroundAposRegex.ReplaceAllString(text, "$1'$2")
+
+	// 3. Fix ordinal numbers (e.g. "21 st" -> "21st", "28 th" -> "28th")
+	text = spacesOrdinalsRegex.ReplaceAllString(text, "$1$2")
+
+	// 4. Fix hyphenated compound words (e.g. "flip - flops" -> "flip-flops")
+	text = spacesHyphenRegex.ReplaceAllString(text, "$1-$2")
+
+	// 5. Fix detached single consonants (e.g. "m owing" -> "mowing", "r ake" -> "rake", "w aved" -> "waved")
+	for i := 0; i < 2; i++ {
+		text = singleConsonantPrefix.ReplaceAllString(text, "$1$2$3")
+	}
+
+	// 6. Ensure space after punctuation if followed immediately by letter/number (e.g. "Hello.Are" -> "Hello. Are")
+	text = punctPunctSpacingRegex.ReplaceAllString(text, "$1 $2")
+
+	// 7. Collapse any multiple consecutive spaces
+	text = strings.Join(strings.Fields(text), " ")
+
+	// 8. Capitalize first letter of sentence if lowercase
+	runes := []rune(text)
+	if len(runes) > 0 && unicode.IsLower(runes[0]) {
+		runes[0] = unicode.ToUpper(runes[0])
+		text = string(runes)
+	}
+
+	return strings.TrimSpace(text)
 }
 
 func isSentenceEnd(word string) bool {

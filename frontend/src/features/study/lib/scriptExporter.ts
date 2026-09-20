@@ -40,6 +40,30 @@ export function parseSRTTime(timeStr: string): number {
 }
 
 /**
+ * Cleans up spacing, punctuation, contractions, and ordinal artifacts from transcript text
+ */
+export function cleanTranscriptTypography(text: string): string {
+  if (!text) return '';
+  return text
+    // 1. Remove spaces before punctuation (, . ? ! ; : )
+    .replace(/\s+([,.:;?!])/g, '$1')
+    // 2. Fix spaces around contractions (e.g. "I 'm" -> "I'm", "don 't" -> "don't")
+    .replace(/\b([A-Za-z]+)\s+['’]([A-Za-z]+)\b/g, "$1'$2")
+    // 3. Fix ordinal numbers (e.g. "21 st" -> "21st", "28 th" -> "28th")
+    .replace(/\b(\d+)\s+(st|nd|rd|th)\b/gi, '$1$2')
+    // 4. Fix hyphenated compound words (e.g. "flip - flops" -> "flip-flops")
+    .replace(/\b([A-Za-z]+)\s+-\s+([A-Za-z]+)\b/g, '$1-$2')
+    // 5. Fix detached single consonants (e.g. "m owing" -> "mowing", "r ake" -> "rake", "w aved" -> "waved")
+    .replace(/(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b/g, '$1$2$3')
+    .replace(/(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b/g, '$1$2$3')
+    // 6. Ensure single space after punctuation if immediately followed by letter/number
+    .replace(/([,.:;?!])([A-Za-z0-9])/g, '$1 $2')
+    // 7. Collapse multiple spaces
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
  * Exports lesson script to Markdown (.md):
  * Supports continuous reading prose for easy reading, as well as timestamped view.
  */
@@ -70,15 +94,15 @@ export function exportToMarkdown(
 
       // If gap between sentences is > 2.5s or previous sentence ends with strong punctuation, break paragraph
       if (prev && s.startMs - prev.endMs > 2500 && currentParagraph.length >= 2) {
-        lines.push(currentParagraph.join(' '));
+        lines.push(cleanTranscriptTypography(currentParagraph.join(' ')));
         lines.push('');
         currentParagraph = [];
       }
-      currentParagraph.push(s.transcript.trim());
+      currentParagraph.push(cleanTranscriptTypography(s.transcript));
     }
 
     if (currentParagraph.length > 0) {
-      lines.push(currentParagraph.join(' '));
+      lines.push(cleanTranscriptTypography(currentParagraph.join(' ')));
       lines.push('');
     }
   }
@@ -94,7 +118,7 @@ export function exportToMarkdown(
 
     lesson.sentences.forEach((s) => {
       const timeRange = `[${formatTime(s.startMs / 1000)} - ${formatTime(s.endMs / 1000)}]`;
-      lines.push(`- **${String(s.index).padStart(2, '0')}** \`${timeRange}\`: ${s.transcript.trim()}`);
+      lines.push(`- **${String(s.index).padStart(2, '0')}** \`${timeRange}\`: ${cleanTranscriptTypography(s.transcript)}`);
     });
     lines.push('');
   }

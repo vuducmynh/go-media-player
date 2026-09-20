@@ -133,3 +133,109 @@ func TestProcessSegmentsDeduplication(t *testing.T) {
 		t.Errorf("sentence IDs wrong: %s, %s, %s", result[0].ID, result[1].ID, result[2].ID)
 	}
 }
+
+func TestProcessSegmentsSubwordTokens(t *testing.T) {
+	segmenter := NewSegmenter()
+
+	// Simulating raw Whisper BPE tokens where long/rare words are split into subwords
+	raw := []WhisperSegment{
+		{
+			Text:    "What is comprehensible input? I am vacuuming the rug.",
+			Offsets: WhisperOffsets{From: 0, To: 6000},
+			Tokens: []WhisperToken{
+				{Text: "What", Offsets: WhisperOffsets{From: 0, To: 400}},
+				{Text: " is", Offsets: WhisperOffsets{From: 400, To: 700}},
+				{Text: " compreh", Offsets: WhisperOffsets{From: 700, To: 1200}},
+				{Text: "ensible", Offsets: WhisperOffsets{From: 1200, To: 1700}}, // subword continuation
+				{Text: " input", Offsets: WhisperOffsets{From: 1700, To: 2200}},
+				{Text: "?", Offsets: WhisperOffsets{From: 2200, To: 2400}}, // punctuation token
+				{Text: " I", Offsets: WhisperOffsets{From: 2500, To: 2700}},
+				{Text: " am", Offsets: WhisperOffsets{From: 2700, To: 3000}},
+				{Text: " vacuum", Offsets: WhisperOffsets{From: 3000, To: 3500}},
+				{Text: "ing", Offsets: WhisperOffsets{From: 3500, To: 3900}}, // subword continuation
+				{Text: " the", Offsets: WhisperOffsets{From: 3900, To: 4200}},
+				{Text: " rug", Offsets: WhisperOffsets{From: 4200, To: 4700}},
+				{Text: ".", Offsets: WhisperOffsets{From: 4700, To: 4900}},
+			},
+		},
+	}
+
+	result := segmenter.ProcessSegments(raw)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 sentences, got %d", len(result))
+	}
+
+	if result[0].Transcript != "What is comprehensible input?" {
+		t.Errorf("sentence 0 wrong: %q, want %q", result[0].Transcript, "What is comprehensible input?")
+	}
+	if result[1].Transcript != "I am vacuuming the rug." {
+		t.Errorf("sentence 1 wrong: %q, want %q", result[1].Transcript, "I am vacuuming the rug.")
+	}
+
+	// Verify word timings in sentence 0: "comprehensible" must be 1 unified word!
+	var foundComprehensible bool
+	for _, w := range result[0].Words {
+		if w.Text == "comprehensible" {
+			foundComprehensible = true
+			if w.StartMs != 700 || w.EndMs != 1700 {
+				t.Errorf("comprehensible timing wrong: %d - %d, want 700 - 1700", w.StartMs, w.EndMs)
+			}
+		}
+	}
+	if !foundComprehensible {
+		t.Errorf("expected unified word 'comprehensible' in WordTimings, got: %+v", result[0].Words)
+	}
+
+	// Verify word timings in sentence 1: "vacuuming" must be 1 unified word!
+	var foundVacuuming bool
+	for _, w := range result[1].Words {
+		if w.Text == "vacuuming" {
+			foundVacuuming = true
+			if w.StartMs != 3000 || w.EndMs != 3900 {
+				t.Errorf("vacuuming timing wrong: %d - %d, want 3000 - 3900", w.StartMs, w.EndMs)
+			}
+		}
+	}
+	if !foundVacuuming {
+		t.Errorf("expected unified word 'vacuuming' in WordTimings, got: %+v", result[1].Words)
+	}
+}
+
+func TestCleanTranscriptText(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			"Hello . Are you ready to improve your English ?",
+			"Hello. Are you ready to improve your English?",
+		},
+		{
+			"It is August 21 st , okay ? And August 28 th is my birthday .",
+			"It is August 21st, okay? And August 28th is my birthday.",
+		},
+		{
+			"I 'm not going to do chores , don 't worry .",
+			"I'm not going to do chores, don't worry.",
+		},
+		{
+			"flip - flops are great for summer .",
+			"Flip-flops are great for summer.",
+		},
+		{
+			"I am m owing the lawn with my lawn m ower .",
+			"I am mowing the lawn with my lawn mower.",
+		},
+		{
+			"The first one is to r ake . I am r aking leaves .",
+			"The first one is to rake. I am raking leaves.",
+		},
+	}
+
+	for _, tt := range tests {
+		got := CleanTranscriptText(tt.input)
+		if got != tt.expected {
+			t.Errorf("CleanTranscriptText(%q) = %q; want %q", tt.input, got, tt.expected)
+		}
+	}
+}

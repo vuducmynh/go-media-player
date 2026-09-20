@@ -17,6 +17,7 @@ import {
   Layers,
   Loader2,
   Info,
+  RotateCcw,
 } from 'lucide-react';
 import { ModelInfo, ModelDownloadProgress, HardwareInfo } from '../../../entities/study/types';
 import { WailsBridge } from '../../../shared/api/wailsBridge';
@@ -83,12 +84,14 @@ interface ModelManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectModelAndStart: (modelId: string) => void;
+  isRemake?: boolean;
 }
 
 export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
   isOpen,
   onClose,
   onSelectModelAndStart,
+  isRemake = false,
 }) => {
   const [models, setModels] = useState<ModelInfo[]>(cachedModels || []);
   const [activeDownload, setActiveDownload] = useState<ModelDownloadProgress | null>(null);
@@ -272,15 +275,23 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
         {/* Header */}
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-fluent-bg-subtle/80">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-fluent-accent/20 border border-fluent-accent/40 flex items-center justify-center text-fluent-accent">
-              <Cpu className="w-5 h-5" />
+            <div
+              className={`w-8 h-8 rounded-xl border flex items-center justify-center ${
+                isRemake
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                  : 'bg-fluent-accent/20 border-fluent-accent/40 text-fluent-accent'
+              }`}
+            >
+              {isRemake ? <RotateCcw className="w-4 h-4" /> : <Cpu className="w-5 h-5" />}
             </div>
             <div>
               <h2 className="text-sm font-bold text-white tracking-wide">
-                Mô hình AI Whisper
+                {isRemake ? 'Tạo Lại Bài Học Bằng AI (Remake)' : 'Mô hình AI Whisper'}
               </h2>
               <p className="text-[10px] text-fluent-text-muted">
-                Hoạt động offline • Tự động tối ưu phần cứng
+                {isRemake
+                  ? 'Chọn mô hình AI Whisper để nhận diện lại âm thanh và làm mới nội dung bài học'
+                  : 'Hoạt động offline • Tự động tối ưu phần cứng'}
               </p>
             </div>
           </div>
@@ -670,13 +681,27 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
                 <button
                   onClick={handleStart}
                   disabled={isDownloading}
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-fluent-accent hover:bg-fluent-accent-hover active:bg-fluent-accent-active text-black font-semibold text-xs shadow-accent-glow transition-all disabled:opacity-40 cursor-pointer"
+                  className={`flex items-center gap-1.5 px-5 py-2 rounded-xl font-semibold text-xs transition-all disabled:opacity-40 cursor-pointer ${
+                    isRemake
+                      ? 'bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                      : 'bg-fluent-accent hover:bg-fluent-accent-hover active:bg-fluent-accent-active text-black shadow-accent-glow'
+                  }`}
                 >
                   {isDownloading ? (
                     <>Đang xử lý tải...</>
                   ) : isSelectedDownloaded ? (
+                    isRemake ? (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" /> Bắt đầu tạo lại ngay
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 fill-current" /> Bắt đầu luyện nghe
+                      </>
+                    )
+                  ) : isRemake ? (
                     <>
-                      <Sparkles className="w-3.5 h-3.5 fill-current" /> Bắt đầu luyện nghe
+                      <Download className="w-3.5 h-3.5" /> Tải về & Tạo lại
                     </>
                   ) : (
                     <>

@@ -42,11 +42,14 @@ func NewStudyService(
 	}
 }
 
-// GetLesson retrieves an existing lesson by fingerprint
+// GetLesson retrieves an existing lesson by fingerprint and cleans transcript typography
 func (s *StudyService) GetLesson(fingerprint string) (*study.Lesson, error) {
 	lesson, err := s.lessonStore.GetLesson(fingerprint)
 	if err != nil || lesson == nil {
 		return nil, err
+	}
+	for i := range lesson.Sentences {
+		lesson.Sentences[i].Transcript = whisper.CleanTranscriptText(lesson.Sentences[i].Transcript)
 	}
 	if lesson.AudioPath != "" && s.streamer != nil {
 		lesson.StreamURL = s.streamer.GetStreamURL(lesson.AudioPath)

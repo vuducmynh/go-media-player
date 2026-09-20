@@ -57,6 +57,7 @@ interface StudyWorkspaceProps {
   holdSlowKey?: string;
   jumpSeconds?: number;
   isVideo?: boolean;
+  onRemakeLesson?: () => void;
 }
 
 const SPEED_PRESETS = [0.5, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0];
@@ -81,6 +82,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
   holdSlowKey = 'KeyS',
   jumpSeconds = 5.0,
   isVideo = false,
+  onRemakeLesson,
 }) => {
   const [lesson, setLesson] = useState<Lesson>(initialLesson);
   const [currentSentenceId, setCurrentSentenceId] = useState<string>(
@@ -599,8 +601,20 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
           </span>
         </div>
 
-        {/* Right: Export/Import + Sidebar Toggle + Tab Selector [Listen | Dictation] */}
+        {/* Right: Remake + Export/Import + Sidebar Toggle + Tab Selector [Listen | Dictation] */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Remake Lesson Button */}
+          {onRemakeLesson && (
+            <button
+              onClick={onRemakeLesson}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-colors cursor-pointer"
+              title="Phân tích lại bài học bằng mô hình AI Whisper để nâng cao độ chính xác hoặc đổi mô hình"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Tạo lại</span>
+            </button>
+          )}
+
           {/* Export / Import Button */}
           <button
             onClick={() => setIsScriptModalOpen(true)}
