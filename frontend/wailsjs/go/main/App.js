@@ -50,6 +50,10 @@ export function ExportBackupData() {
   return window['go']['main']['App']['ExportBackupData']();
 }
 
+export function GetAllLessonFingerprints() {
+  return window['go']['main']['App']['GetAllLessonFingerprints']();
+}
+
 export function GetAppVersion() {
   return window['go']['main']['App']['GetAppVersion']();
 }

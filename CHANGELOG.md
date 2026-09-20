@@ -4,6 +4,25 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.2] - 21/09/2026
+
+# Ghi nhớ tiến trình YouTube & Lưu trữ bài học Luyện nghe sâu bền vững
+
+Bản cập nhật v1.3.2 tối ưu hóa trải nghiệm người dùng với YouTube và Luyện nghe sâu: tự động ghi nhớ vị trí xem dở, bảo tồn vĩnh viễn bài học phân tích bằng AI Whisper, không để thất lạc video khi chuyển thư mục, và khôi phục bài học đang dở ngay khi mở ứng dụng.
+
+### Cải tiến (4)
+- **Ghi nhớ phiên và khôi phục tự động**: Tự động lưu và khôi phục video hoặc tệp tin đang nghe/học dở nhất ngay khi mở lại ứng dụng; tự động chuyển sang tab YouTube khi thêm hoặc phát video.
+- **Huy hiệu "✨ Luyện sâu" trực quan**: Hiển thị nhãn nổi bật cho tất cả các video hoặc tệp tin đã có bài học phân tích sẵn bằng Whisper AI, giúp người dùng vào học ngay lập tức với độ trễ 0ms mà không cần phân tích lại.
+- **Tự động lưu tiến trình liên tục**: Tự động lưu tiến trình định kỳ khi đang phát, khi chuyển câu, khi đóng chế độ Luyện nghe sâu và khi thoát ứng dụng.
+- **Dọn dẹp tiến trình linh hoạt**: Cho phép xóa tiến trình "Đang nghe" đối với cả video YouTube để reset nghe lại từ đầu khi cần.
+
+### Sửa lỗi (1)
+- **Khắc phục video YouTube bị ẩn khi chọn thư mục**: Sửa triệt để lỗi bộ lọc khiến tab YouTube hoặc Đang nghe bị trống khi đang chọn một thư mục cục bộ; danh sách YouTube luôn hiển thị toàn bộ 100% video đã lưu.
+
+### Bản vá (0)
+
+---
+
 ## [v1.3.1] - 21/09/2026
 
 # Nâng cấp giao diện Cập nhật ứng dụng (Changelog Markdown UI)

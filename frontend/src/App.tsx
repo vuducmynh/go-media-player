@@ -39,6 +39,7 @@ export const App: React.FC = () => {
 
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('in_progress');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [lessonFingerprints, setLessonFingerprints] = useState<Set<string>>(new Set());
 
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isHotkeysOpen, setIsHotkeysOpen] = useState<boolean>(false);
@@ -58,10 +59,13 @@ export const App: React.FC = () => {
       setActiveFolder(currentActive || '');
 
       setScanProgress((prev) => ({ ...prev, isScanning: true }));
-      const [scannedFiles, ytVideos] = await Promise.all([
+      const [lessonFps, scannedFiles, ytVideos] = await Promise.all([
+        WailsBridge.getAllLessonFingerprints(),
         WailsBridge.scanFiles(),
         WailsBridge.getYouTubeVideos(),
       ]);
+
+      setLessonFingerprints(new Set(lessonFps));
 
       const map = new Map<string, MediaFile>();
       [...ytVideos, ...scannedFiles].forEach((f) => map.set(f.fingerprint, f));
@@ -69,6 +73,18 @@ export const App: React.FC = () => {
 
       setFiles(combined);
       setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: combined.length }));
+
+      // Restore last played file from session
+      const lastFp = localStorage.getItem('last_playing_fingerprint');
+      if (lastFp) {
+        const found = combined.find((f) => f.fingerprint === lastFp);
+        if (found) {
+          setCurrentFile(found);
+          if (found.source === 'youtube' || Boolean(found.youtubeId)) {
+            setActiveFilter('youtube');
+          }
+        }
+      }
     } catch (err) {
       console.error('Error loading initial data:', err);
       setScanProgress((prev) => ({ ...prev, isScanning: false }));
@@ -191,7 +207,10 @@ export const App: React.FC = () => {
         return [newMedia, ...prev];
       });
 
+      // Switch to YouTube tab and remember session
+      setActiveFilter('youtube');
       setCurrentFile(newMedia);
+      localStorage.setItem('last_playing_fingerprint', newMedia.fingerprint);
       return newMedia;
     } catch (err) {
       console.error('Error adding YouTube video:', err);
@@ -206,6 +225,7 @@ export const App: React.FC = () => {
       setFiles((prev) => prev.filter((f) => f.id !== videoIdOrId && f.youtubeId !== videoIdOrId));
       if (currentFile && (currentFile.id === videoIdOrId || currentFile.youtubeId === videoIdOrId)) {
         setCurrentFile(null);
+        localStorage.removeItem('last_playing_fingerprint');
       }
     } catch (err) {
       console.error('Error removing YouTube video:', err);
@@ -259,6 +279,7 @@ export const App: React.FC = () => {
   // Select file to play
   const handleSelectFile = (file: MediaFile) => {
     setCurrentFile(file);
+    localStorage.setItem('last_playing_fingerprint', file.fingerprint);
   };
 
   // Update playback progress & sync state
@@ -274,6 +295,9 @@ export const App: React.FC = () => {
 
       const completed = duration > 0 && position >= duration * 0.95;
       const nowIso = new Date().toISOString();
+
+      // Remember session
+      localStorage.setItem('last_playing_fingerprint', fingerprint);
 
       // Update backend
       await WailsBridge.savePlaybackProgress(
@@ -460,6 +484,7 @@ export const App: React.FC = () => {
         activeFilter={activeFilter}
         searchQuery={searchQuery}
         activeFolder={activeFolder}
+        lessonFingerprints={lessonFingerprints}
         onSelectFile={handleSelectFile}
         onAddFolder={handleAddFolder}
         onRemoveFolder={handleRemoveFolder}
@@ -488,6 +513,7 @@ export const App: React.FC = () => {
         onOpenFileFolder={handleOpenFileFolder}
         isSlowHeld={isSlowHeld}
         setSlowSpeedActive={setIsSlowHeld}
+        onLessonCreated={(fp) => setLessonFingerprints((prev) => new Set([...prev, fp]))}
       />
 
       {/* Add YouTube Video Modal */}

@@ -51,6 +51,7 @@ interface SidebarProps {
   onClearFileProgress?: (fingerprint: string) => void;
   onClearAllProgress?: () => void;
   updater?: ReturnType<typeof useUpdater>;
+  lessonFingerprints?: Set<string>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -61,6 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeFilter,
   searchQuery,
   activeFolder,
+  lessonFingerprints,
   onSelectFile,
   onAddFolder,
   onRemoveFolder,
@@ -169,18 +171,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   }, [files, activeFolder]);
 
-  // Tab counts for the current folder scope
+  // Tab counts for the current folder scope (inProgress and youtube are library-wide)
   const inProgressCount = useMemo(
-    () => filesInActiveFolder.filter((f) => !f.completed && f.lastPosition > 0).length,
-    [filesInActiveFolder]
+    () => files.filter((f) => !f.completed && f.lastPosition > 0).length,
+    [files]
   );
   const audioCount = useMemo(
     () => filesInActiveFolder.filter((f) => f.type === 'audio' && f.source !== 'youtube').length,
     [filesInActiveFolder]
   );
   const youtubeCount = useMemo(
-    () => filesInActiveFolder.filter((f) => f.source === 'youtube' || Boolean(f.youtubeId)).length,
-    [filesInActiveFolder]
+    () => files.filter((f) => f.source === 'youtube' || Boolean(f.youtubeId)).length,
+    [files]
   );
   const videoCount = useMemo(
     () => filesInActiveFolder.filter((f) => f.type === 'video' && f.source !== 'youtube').length,
@@ -193,7 +195,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Filter and sort files by active folder, search, category filters, and sort option
   const currentFolderFiles = useMemo(() => {
-    let list = filesInActiveFolder.filter((file) => {
+    const baseList =
+      activeFilter === 'youtube' || activeFilter === 'in_progress'
+        ? files
+        : filesInActiveFolder;
+
+    let list = baseList.filter((file) => {
       const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
 
       // Category filter
@@ -245,7 +252,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
 
     return list;
-  }, [filesInActiveFolder, activeFilter, searchQuery, sortBy]);
+  }, [files, filesInActiveFolder, activeFilter, searchQuery, sortBy]);
 
   const activeFolderStat = folderStats.find((f) => f.path === activeFolder);
   const currentFolderName =
@@ -848,7 +855,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
 
                         {/* Clear progress button for individual file */}
-                        {!isYt && file.lastPosition > 0 && onClearFileProgress && (
+                        {file.lastPosition > 0 && onClearFileProgress && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -890,6 +897,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             📁 {file.relativeDir}
                           </span>
                         )
+                      )}
+                      {lessonFingerprints?.has(file.fingerprint) && (
+                        <span
+                          title="Đã có bài học Luyện nghe sâu - bấm để tiếp tục học"
+                          className="px-1 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[9px] shrink-0 font-semibold flex items-center gap-0.5 shadow-sm"
+                        >
+                          ✨ Luyện sâu
+                        </span>
                       )}
                       <span className="truncate">{file.name}</span>
                     </p>

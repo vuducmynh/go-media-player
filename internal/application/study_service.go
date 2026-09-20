@@ -417,4 +417,13 @@ func (s *StudyService) CancelAll() {
 	s.activeCancels = make(map[string]context.CancelFunc)
 }
 
+// GetAllLessonFingerprints returns all fingerprints that have an existing lesson
+func (s *StudyService) GetAllLessonFingerprints() []string {
+	fps, err := s.lessonStore.ListLessonFingerprints()
+	if err != nil {
+		return []string{}
+	}
+	return fps
+}
+
 

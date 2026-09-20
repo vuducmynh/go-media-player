@@ -49,6 +49,7 @@ interface PlayerViewProps {
   onOpenFileFolder: (path: string) => void;
   isSlowHeld: boolean;
   setSlowSpeedActive: (active: boolean) => void;
+  onLessonCreated?: (fingerprint: string) => void;
 }
 
 export const PlayerView: React.FC<PlayerViewProps> = ({
@@ -60,6 +61,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   onOpenFileFolder,
   isSlowHeld,
   setSlowSpeedActive,
+  onLessonCreated,
 }) => {
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -191,6 +193,42 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     };
   }, []);
 
+  // Periodic progress saving during playback
+  const lastSavedPosRef = useRef<number>(0);
+  useEffect(() => {
+    if (!currentFile || !activeIsPlaying || activeCurrentTime <= 0) return;
+
+    if (Math.abs(activeCurrentTime - lastSavedPosRef.current) >= 3) {
+      lastSavedPosRef.current = activeCurrentTime;
+      onUpdateFileProgress(
+        currentFile.fingerprint,
+        activeCurrentTime,
+        activeDuration || currentFile.duration,
+        loopA,
+        loopB
+      );
+    }
+  }, [activeIsPlaying, activeCurrentTime, activeDuration, currentFile, loopA, loopB, onUpdateFileProgress]);
+
+  // Save progress when window is closing or reloading
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentFile && activeCurrentTime > 0) {
+        onUpdateFileProgress(
+          currentFile.fingerprint,
+          activeCurrentTime,
+          activeDuration || currentFile.duration,
+          loopA,
+          loopB
+        );
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentFile, activeCurrentTime, activeDuration, loopA, loopB, onUpdateFileProgress]);
+
   // Study playback helpers
   const handleStudyPlay = () => {
     if (!currentFile) return;
@@ -208,6 +246,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     } else {
       mediaRef.current?.pause();
       setIsPlaying(false);
+    }
+    if (activeCurrentTime > 0) {
+      onUpdateFileProgress(
+        currentFile.fingerprint,
+        activeCurrentTime,
+        activeDuration || currentFile.duration,
+        loopA,
+        loopB
+      );
     }
   };
 
@@ -266,6 +313,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       if (newLesson && newLesson.sentences && newLesson.sentences.length > 0) {
         setCurrentLesson(newLesson);
         setIsStudyModeOpen(true);
+        onLessonCreated?.(currentFile.fingerprint);
       } else {
         alert('Không tìm thấy câu phân đoạn nào trong audio.');
       }
@@ -502,9 +550,13 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
     if (isYouTube) {
       ytPlayer.togglePlay();
-      if (ytPlayer.isPlaying) {
-        onUpdateFileProgress(currentFile.fingerprint, ytPlayer.currentTime, ytPlayer.duration, loopA, loopB);
-      }
+      onUpdateFileProgress(
+        currentFile.fingerprint,
+        ytPlayer.currentTime,
+        ytPlayer.duration || currentFile.duration,
+        loopA,
+        loopB
+      );
       return;
     }
 
@@ -516,22 +568,37 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     } else {
       media.pause();
       setIsPlaying(false);
-      onUpdateFileProgress(currentFile.fingerprint, media.currentTime, media.duration, loopA, loopB);
+      onUpdateFileProgress(
+        currentFile.fingerprint,
+        media.currentTime,
+        media.duration || currentFile.duration,
+        loopA,
+        loopB
+      );
     }
   };
 
   const handleSeekTo = (seconds: number) => {
     if (isYouTube) {
       ytPlayer.seekTo(seconds);
-      return;
+    } else {
+      const media = mediaRef.current;
+      if (!media || isNaN(seconds)) return;
+      const maxDur = media.duration && !isNaN(media.duration) ? media.duration : duration || 0;
+      const clamped = Math.max(0, maxDur > 0 ? Math.min(seconds, maxDur) : seconds);
+      media.currentTime = clamped;
+      setCurrentTime(clamped);
     }
 
-    const media = mediaRef.current;
-    if (!media || isNaN(seconds)) return;
-    const maxDur = media.duration && !isNaN(media.duration) ? media.duration : duration || 0;
-    const clamped = Math.max(0, maxDur > 0 ? Math.min(seconds, maxDur) : seconds);
-    media.currentTime = clamped;
-    setCurrentTime(clamped);
+    if (currentFile && seconds > 0) {
+      onUpdateFileProgress(
+        currentFile.fingerprint,
+        seconds,
+        activeDuration || currentFile.duration,
+        loopA,
+        loopB
+      );
+    }
   };
 
   const handleSeekDelta = (delta: number) => {
@@ -791,6 +858,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             onClose={() => {
               handleStudyPause();
               setIsStudyModeOpen(false);
+              if (currentFile && activeCurrentTime > 0) {
+                onUpdateFileProgress(
+                  currentFile.fingerprint,
+                  activeCurrentTime,
+                  activeDuration || currentFile.duration,
+                  loopA,
+                  loopB
+                );
+              }
             }}
             onSaveAttempt={handleSaveAttempt}
             onToggleStar={handleToggleStar}

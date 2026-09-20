@@ -29,6 +29,8 @@ export function DownloadUpdate(arg1:string):Promise<void>;
 
 export function ExportBackupData():Promise<string>;
 
+export function GetAllLessonFingerprints():Promise<Array<string>>;
+
 export function GetAppVersion():Promise<string>;
 
 export function GetGPUInfo():Promise<study.GPUInfo>;

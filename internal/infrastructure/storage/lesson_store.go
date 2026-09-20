@@ -164,3 +164,36 @@ func (ls *LessonStore) ListLessons() ([]*study.Lesson, error) {
 
 	return lessons, nil
 }
+
+// ListLessonFingerprints returns all lesson fingerprints currently stored
+func (ls *LessonStore) ListLessonFingerprints() ([]string, error) {
+	ls.mu.RLock()
+	defer ls.mu.RUnlock()
+
+	entries, err := os.ReadDir(ls.baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("read lessons dir failed: %w", err)
+	}
+
+	var fingerprints []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		filePath := filepath.Join(ls.baseDir, entry.Name())
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+
+		var meta struct {
+			Fingerprint string `json:"fingerprint"`
+		}
+		if err := json.Unmarshal(data, &meta); err == nil && meta.Fingerprint != "" {
+			fingerprints = append(fingerprints, meta.Fingerprint)
+		}
+	}
+
+	return fingerprints, nil
+}

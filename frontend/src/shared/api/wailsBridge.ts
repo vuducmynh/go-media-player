@@ -44,6 +44,7 @@ declare global {
           GetInstalledModels: () => Promise<ModelInfo[]>;
           DownloadModel: (modelId: string) => Promise<void>;
           GetLesson: (fingerprint: string) => Promise<Lesson | null>;
+          GetAllLessonFingerprints: () => Promise<string[]>;
           SaveLesson: (lesson: Lesson) => Promise<void>;
           ProcessLesson: (
             fingerprint: string,
@@ -258,6 +259,13 @@ export const WailsBridge = {
       return await window.go.main.App.GetLesson(fingerprint);
     }
     return null;
+  },
+
+  async getAllLessonFingerprints(): Promise<string[]> {
+    if (window.go?.main?.App?.GetAllLessonFingerprints) {
+      return await window.go.main.App.GetAllLessonFingerprints();
+    }
+    return [];
   },
 
   async saveLesson(lesson: Lesson): Promise<boolean> {

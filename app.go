@@ -262,6 +262,14 @@ func (a *App) GetLesson(fingerprint string) (*study.Lesson, error) {
 	return a.studySvc.GetLesson(fingerprint)
 }
 
+// GetAllLessonFingerprints returns list of media fingerprints with saved lessons
+func (a *App) GetAllLessonFingerprints() []string {
+	if a.studySvc == nil {
+		return []string{}
+	}
+	return a.studySvc.GetAllLessonFingerprints()
+}
+
 // SaveLesson persists or updates a study lesson (e.g. from imported script)
 func (a *App) SaveLesson(lesson study.Lesson) error {
 	if a.studySvc == nil {

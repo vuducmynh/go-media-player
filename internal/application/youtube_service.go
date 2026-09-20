@@ -115,20 +115,10 @@ func (s *YouTubeService) AddYouTubeVideo(rawURL string) (*media.MediaItem, error
 // GetYouTubeMediaItems returns all saved YouTube videos as MediaItem instances with hydrated progress
 func (s *YouTubeService) GetYouTubeMediaItems() []media.MediaItem {
 	settings := s.store.GetSettings()
-	allStates := s.store.GetAllPlaybackStates()
 
 	var items []media.MediaItem
 	for _, y := range settings.YouTubeVideos {
-		m := s.convertYouTubeToMediaItem(y)
-		if state, exists := allStates[m.Fingerprint]; exists {
-			m.LastPosition = state.LastPosition
-			m.Duration = state.Duration
-			m.Completed = state.Completed
-			m.LastPlayedAt = state.LastPlayedAt
-			m.LoopA = state.LoopA
-			m.LoopB = state.LoopB
-		}
-		items = append(items, m)
+		items = append(items, s.convertYouTubeToMediaItem(y))
 	}
 
 	return items
@@ -141,7 +131,7 @@ func (s *YouTubeService) RemoveYouTubeVideo(videoID string) error {
 
 func (s *YouTubeService) convertYouTubeToMediaItem(y media.YouTubeItem) media.MediaItem {
 	fp := "yt_" + y.VideoID
-	return media.MediaItem{
+	m := media.MediaItem{
 		ID:          fp,
 		Fingerprint: fp,
 		Source:      media.SourceTypeYouTube,
@@ -159,4 +149,17 @@ func (s *YouTubeService) convertYouTubeToMediaItem(y media.YouTubeItem) media.Me
 		Thumbnail:   y.Thumbnail,
 		YouTubeID:   y.VideoID,
 	}
+
+	if state := s.store.GetPlaybackState(fp); state != nil {
+		m.LastPosition = state.LastPosition
+		if state.Duration > 0 {
+			m.Duration = state.Duration
+		}
+		m.Completed = state.Completed
+		m.LastPlayedAt = state.LastPlayedAt
+		m.LoopA = state.LoopA
+		m.LoopB = state.LoopB
+	}
+
+	return m
 }
