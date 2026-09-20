@@ -134,6 +134,43 @@ func TestProcessSegmentsDeduplication(t *testing.T) {
 	}
 }
 
+func TestProcessSegmentsPauseBoundary(t *testing.T) {
+	segmenter := NewSegmenter()
+
+	// Simulating speech without periods where the speaker paused for 1.2s between actions
+	raw := []WhisperSegment{
+		{
+			Text:    "I'm going to shake this can I'm shaking this can",
+			Offsets: WhisperOffsets{From: 1000, To: 6000},
+			Tokens: []WhisperToken{
+				{Text: "I'm", Offsets: WhisperOffsets{From: 1000, To: 1200}},
+				{Text: " going", Offsets: WhisperOffsets{From: 1200, To: 1400}},
+				{Text: " to", Offsets: WhisperOffsets{From: 1400, To: 1500}},
+				{Text: " shake", Offsets: WhisperOffsets{From: 1500, To: 1800}},
+				{Text: " this", Offsets: WhisperOffsets{From: 1800, To: 2000}},
+				{Text: " can", Offsets: WhisperOffsets{From: 2000, To: 2200}},
+				// 1.2s pause (2200 to 3400)
+				{Text: " I'm", Offsets: WhisperOffsets{From: 3400, To: 3600}},
+				{Text: " shaking", Offsets: WhisperOffsets{From: 3600, To: 3900}},
+				{Text: " this", Offsets: WhisperOffsets{From: 3900, To: 4100}},
+				{Text: " can", Offsets: WhisperOffsets{From: 4100, To: 4400}},
+			},
+		},
+	}
+
+	result := segmenter.ProcessSegments(raw)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 sentences split by pause, got %d: %+v", len(result), result)
+	}
+
+	if result[0].Transcript != "I'm going to shake this can." {
+		t.Errorf("sentence 0 wrong: %q", result[0].Transcript)
+	}
+	if result[1].Transcript != "I'm shaking this can." {
+		t.Errorf("sentence 1 wrong: %q", result[1].Transcript)
+	}
+}
+
 func TestProcessSegmentsSubwordTokens(t *testing.T) {
 	segmenter := NewSegmenter()
 
@@ -229,6 +266,26 @@ func TestCleanTranscriptText(t *testing.T) {
 		{
 			"The first one is to r ake . I am r aking leaves .",
 			"The first one is to rake. I am raking leaves.",
+		},
+		{
+			"because the dogs i don't know where their mouths have been so they're probably dirty i'm going to shake this can",
+			"Because the dogs I don't know where their mouths have been so they're probably dirty I'm going to shake this can",
+		},
+		{
+			"queen from england no Elizabeth II. so this is the queen's wave",
+			"Queen from England no Elizabeth II. So this is the queen's wave",
+		},
+		{
+			"build skyscrapers prisons schools Now I'm gonna hang my hat",
+			"Build skyscrapers prisons schools. Now I'm gonna hang my hat",
+		},
+		{
+			"I've lifted the sofa It's also very common",
+			"I've lifted the sofa. It's also very common",
+		},
+		{
+			"What is it ? it is a dog .",
+			"What is it? It is a dog.",
 		},
 	}
 

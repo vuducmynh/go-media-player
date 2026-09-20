@@ -4,6 +4,20 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.6] - 21/09/2026
+
+# Ngắt câu theo khoảng lặng (Pause Boundary), Viết hoa đại từ "I" & Khởi tạo Whisper Prompt Conditioning
+
+Bản cập nhật v1.3.6 hoàn thiện độ chính xác câu từ và chính tả tiếng Anh khi phân tích bằng AI Whisper: tự động tách câu theo khoảng lặng ngừng nghỉ tự nhiên của người nói, sửa triệt để lỗi đại từ "I" và danh từ riêng viết thường, ngắt các câu nối dài (run-on sentences), và áp dụng kỹ thuật Prompt Conditioning giúp AI luôn giữ văn phong chuẩn mực kèm dấu câu hoàn chỉnh.
+
+### Cải tiến & Khắc phục lỗi (4)
+- **Tách câu thông minh theo khoảng lặng (Speech Pause Boundary Detection)**: Khi người nói tạm dừng từ 750ms trở lên (hoặc dừng 350ms trước một từ chuyển câu viết hoa như *Now*, *Then*, *It's*), hệ thống tự động chốt câu và bổ sung dấu chấm `.` kết thúc. Khắc phục triệt để tình trạng các câu nói nhanh dồn cục thành một đoạn văn dài không có dấu chấm.
+- **Tự động chuẩn hóa đại từ nhân xưng "I" & danh từ riêng**: Tự động viết hoa 100% đại từ `I` và các dạng rút gọn (`I'm`, `I've`, `I'll`, `I'd`), danh từ riêng/quốc gia (`England`, `English`, `America`...) và tự động viết hoa chữ cái đầu sau dấu chấm câu.
+- **Kỹ thuật Whisper Prompt Conditioning & `--carry-initial-prompt`**: Truyền câu mồi chuẩn mực vào Whisper trước khi nhận diện và duy trì xuyên suốt qua các khối 30s. Điều này "dạy" mô hình AI luôn xuất ra dấu câu đầy đủ, viết hoa chuẩn và không bị suy giảm chất lượng thành chữ thường không dấu.
+- **Bảo đảm câu luôn có dấu câu kết thúc**: Mọi câu trong giao diện bài học và tệp Markdown xuất ra đều được bảo đảm kết thúc bằng dấu chấm `.`, hỏi `?` hoặc cảm `!`, ngăn ngừa tình trạng hai câu dính chùm vào nhau.
+
+---
+
 ## [v1.3.5] - 21/09/2026
 
 # Khắc phục lỗi tách rời từ ngữ AI Whisper (BPE Tokenizer Fix), Làm sạch chính tả & Tính năng Tạo lại bài học (Remake AI)

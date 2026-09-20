@@ -44,7 +44,7 @@ export function parseSRTTime(timeStr: string): number {
  */
 export function cleanTranscriptTypography(text: string): string {
   if (!text) return '';
-  return text
+  let cleaned = text
     // 1. Remove spaces before punctuation (, . ? ! ; : )
     .replace(/\s+([,.:;?!])/g, '$1')
     // 2. Fix spaces around contractions (e.g. "I 'm" -> "I'm", "don 't" -> "don't")
@@ -58,9 +58,25 @@ export function cleanTranscriptTypography(text: string): string {
     .replace(/(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b/g, '$1$2$3')
     // 6. Ensure single space after punctuation if immediately followed by letter/number
     .replace(/([,.:;?!])([A-Za-z0-9])/g, '$1 $2')
-    // 7. Collapse multiple spaces
+    // 7. Fix lowercase English pronoun "I" and its contractions
+    .replace(/\bi\b/g, 'I')
+    .replace(/\bi(['’](?:m|ve|ll|d))\b/gi, (_, p1) => 'I' + p1.toLowerCase())
+    // 8. Capitalize common proper nouns
+    .replace(/\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british)\b/gi, (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase())
+    // 9. Capitalize letter following sentence punctuation (. ? !)
+    .replace(/([.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase())
+    // 10. Split run-on clauses before strong sentence transitions
+    .replace(/\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)/g, '$1. $2')
+    // 11. Collapse multiple spaces
     .replace(/\s{2,}/g, ' ')
     .trim();
+
+  // 12. Ensure first letter is capitalized
+  if (cleaned.length > 0 && cleaned.charAt(0) >= 'a' && cleaned.charAt(0) <= 'z') {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  return cleaned;
 }
 
 /**
@@ -98,7 +114,11 @@ export function exportToMarkdown(
         lines.push('');
         currentParagraph = [];
       }
-      currentParagraph.push(cleanTranscriptTypography(s.transcript));
+      let sentText = cleanTranscriptTypography(s.transcript);
+      if (sentText && !/[.!?]["']?$/.test(sentText)) {
+        sentText += '.';
+      }
+      currentParagraph.push(sentText);
     }
 
     if (currentParagraph.length > 0) {

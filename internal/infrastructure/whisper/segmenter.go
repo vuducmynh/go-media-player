@@ -21,6 +21,10 @@ var (
 	spacesHyphenRegex      = regexp.MustCompile(`\b([A-Za-z]+)\s+-\s+([A-Za-z]+)\b`)
 	singleConsonantPrefix  = regexp.MustCompile(`(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b`)
 	punctPunctSpacingRegex = regexp.MustCompile(`([,.:;?!])([A-Za-z0-9])`)
+	pronounIRegex          = regexp.MustCompile(`(?i)\b(i)(['’](?:m|ve|ll|d))?\b`)
+	afterPunctRegex        = regexp.MustCompile(`([.!?]\s+)([a-z])`)
+	properNounsRegex       = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british)\b`)
+	runonTransitionRegex   = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)`)
 )
 
 // WhisperJSONOutput represents the output structure produced by whisper-cli -ojf
@@ -86,6 +90,14 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 		}
 		if currentEndMs <= currentStartMs {
 			currentEndMs = currentWords[len(currentWords)-1].EndMs
+		}
+
+		// Ensure sentence ends with terminating punctuation if missing
+		if !sentenceEndRegex.MatchString(text) {
+			text += "."
+			if len(currentWords) > 0 {
+				currentWords[len(currentWords)-1].Text += "."
+			}
 		}
 
 		// Safety check: if sentence is just 1 short word and previous sentence exists, merge with previous
@@ -170,6 +182,22 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 					}
 				} else {
 					// New word start!
+					// Check for natural speech pause boundary (>= 750ms silence) or capitalized sentence starter (>= 350ms)
+					if len(currentWords) >= 3 {
+						prevEnd := currentWords[len(currentWords)-1].EndMs
+						gapMs := tok.Offsets.From - prevEnd
+						if gapMs >= 750 {
+							finalizeSentence()
+						} else if gapMs >= 350 && isSentenceStartWord(cleanToken) {
+							finalizeSentence()
+						}
+					}
+
+					if currentStartMs < 0 {
+						currentStartMs = tok.Offsets.From
+					}
+					currentEndMs = tok.Offsets.To
+
 					if currentText.Len() > 0 {
 						currentText.WriteString(" ")
 					}
@@ -309,10 +337,40 @@ func CleanTranscriptText(text string) string {
 	// 6. Ensure space after punctuation if followed immediately by letter/number (e.g. "Hello.Are" -> "Hello. Are")
 	text = punctPunctSpacingRegex.ReplaceAllString(text, "$1 $2")
 
-	// 7. Collapse any multiple consecutive spaces
+	// 7. Fix lowercase English pronoun "I" and its contractions (e.g. "i" -> "I", "i'm" -> "I'm")
+	text = pronounIRegex.ReplaceAllStringFunc(text, func(m string) string {
+		if strings.HasPrefix(m, "i") {
+			return "I" + m[1:]
+		}
+		return m
+	})
+
+	// 8. Capitalize common proper nouns
+	text = properNounsRegex.ReplaceAllStringFunc(text, func(m string) string {
+		runes := []rune(m)
+		if len(runes) > 0 && unicode.IsLower(runes[0]) {
+			runes[0] = unicode.ToUpper(runes[0])
+			return string(runes)
+		}
+		return m
+	})
+
+	// 9. Capitalize letter following sentence punctuation (. ? !)
+	text = afterPunctRegex.ReplaceAllStringFunc(text, func(m string) string {
+		parts := afterPunctRegex.FindStringSubmatch(m)
+		if len(parts) == 3 {
+			return parts[1] + strings.ToUpper(parts[2])
+		}
+		return m
+	})
+
+	// 10. Split run-on clauses where a lowercase word is followed immediately by a capitalized sentence transition
+	text = runonTransitionRegex.ReplaceAllString(text, "$1. $2")
+
+	// 11. Collapse any multiple consecutive spaces
 	text = strings.Join(strings.Fields(text), " ")
 
-	// 8. Capitalize first letter of sentence if lowercase
+	// 12. Capitalize first letter of sentence if lowercase
 	runes := []rune(text)
 	if len(runes) > 0 && unicode.IsLower(runes[0]) {
 		runes[0] = unicode.ToUpper(runes[0])
@@ -327,6 +385,18 @@ func isSentenceEnd(word string) bool {
 		return false
 	}
 	return sentenceEndRegex.MatchString(word)
+}
+
+func isSentenceStartWord(word string) bool {
+	trimmed := strings.TrimSpace(word)
+	if len(trimmed) == 0 {
+		return false
+	}
+	if trimmed == "I" || strings.HasPrefix(trimmed, "I'") || strings.HasPrefix(trimmed, "I’") {
+		return false
+	}
+	r := []rune(trimmed)[0]
+	return unicode.IsUpper(r)
 }
 
 func generateSentenceID(index int) string {
