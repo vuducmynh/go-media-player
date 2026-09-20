@@ -117,6 +117,29 @@ Khi thêm tính năng mới hoặc sửa lỗi sẵn sàng phát hành, Agent ph
   2. `wails.json`: `"productVersion": "X.Y.Z"`
   3. `frontend/package.json`: `"version": "X.Y.Z"`
 
+### Bước 1b: Cập nhật `CHANGELOG.md` theo chuẩn định dạng bắt buộc (Changelog Governance)
+- Mọi Agent khi chuẩn bị phát hành phiên bản mới **BẮT BUỘC** phải thêm mục ghi chú phát hành vào đầu file `CHANGELOG.md` theo đúng cấu trúc 3 phần chuẩn sau:
+  ```markdown
+  ## [vX.Y.Z] - DD/MM/YYYY
+
+  # Tên bản cập nhật (Tiếng Việt rõ ràng, nổi bật)
+
+  Mô tả nhanh tóm tắt nội dung và giá trị của bản cập nhật.
+
+  ### Cải tiến (x)
+  - **Tên cải tiến 1**: Mô tả chi tiết...
+  - **Tên cải tiến 2**: Mô tả chi tiết...
+
+  ### Sửa lỗi (y)
+  - **Tên lỗi 1**: Mô tả chi tiết lỗi đã khắc phục...
+
+  ### Bản vá (z)
+  - **Tên bản vá 1**: Mô tả chi tiết...
+  ```
+  *Lưu ý*:
+  - Cả 3 mục `Cải tiến (x)`, `Sửa lỗi (y)`, `Bản vá (z)` phải luôn đi kèm để hệ thống UI tự động phân tích và hiển thị Accordion đếm số lượng cho người dùng.
+  - Nếu mục nào không có thay đổi, ghi `(0)` và để trống bên dưới.
+
 ### Bước 2: Biên dịch và kiểm thử cục bộ
 - Chạy `npm run build` tại `frontend/`.
 - Chạy `cmd.exe /c "build.bat < nul"` tại thư mục gốc.

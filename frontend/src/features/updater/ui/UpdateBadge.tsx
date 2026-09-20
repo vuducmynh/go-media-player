@@ -60,13 +60,13 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = ({
         </div>
       )}
 
-      {/* State 3: Update available -> Nút Cập nhật */}
+      {/* State 3: Update available -> Nút Cập nhật (mở modal xem changelog & tải về) */}
       {status === 'update_available' && (
         <button
           type="button"
-          onClick={onStartDownload}
-          title={`Có bản cập nhật mới ${updateInfo?.latestVersion || ''}. Bấm để tải về ngay!`}
-          className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[10px] font-semibold transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)] hover:scale-105 active:scale-95"
+          onClick={onOpenInstallModal}
+          title={`Có bản cập nhật mới ${updateInfo?.latestVersion || ''}. Bấm để xem thông tin chi tiết & cập nhật!`}
+          className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[10px] font-semibold transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)] hover:scale-105 active:scale-95 cursor-pointer"
         >
           <Sparkles className="w-2.5 h-2.5 text-emerald-300 animate-pulse" />
           <span>Cập nhật {updateInfo?.latestVersion || ''}</span>
@@ -111,13 +111,13 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = ({
         </div>
       )}
 
-      {/* State 5: Ready to install -> Biểu tượng Install */}
+      {/* State 5: Ready to install -> Biểu tượng Install (Tĩnh, không nhảy animate-bounce) */}
       {status === 'ready_to_install' && (
         <button
           type="button"
           onClick={onOpenInstallModal}
           title="Bản cập nhật đã tải xong! Bấm để cài đặt"
-          className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black text-[10px] font-bold shadow-[0_0_12px_rgba(16,185,129,0.5)] transition-all animate-bounce"
+          className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black text-[10px] font-bold shadow-[0_0_12px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
         >
           <Download className="w-2.5 h-2.5 stroke-[2.5]" />
           <span>Cài đặt</span>

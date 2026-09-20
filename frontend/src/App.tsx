@@ -525,6 +525,8 @@ export const App: React.FC = () => {
         errorMessage={updater.errorMessage}
         onApplyUpdate={updater.applyUpdate}
         onRestartApp={updater.restartApp}
+        onStartDownload={updater.startDownload}
+        downloadPercent={updater.downloadPercent}
       />
     </div>
   );
