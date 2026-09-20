@@ -22,9 +22,9 @@ cd ..
 echo.
 echo [3/3] Bien dich Wails Desktop Binary (.exe)...
 if exist "%USERPROFILE%\go\bin\wails.exe" (
-    "%USERPROFILE%\go\bin\wails.exe" build -s -clean=false
+    "%USERPROFILE%\go\bin\wails.exe" build -clean=false
 ) else (
-    wails build -s -clean=false
+    wails build -clean=false
 )
 
 if %errorlevel% neq 0 (

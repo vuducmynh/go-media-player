@@ -258,6 +258,9 @@ func (s *UpdaterService) DownloadUpdate(ctx context.Context, assetURL string, on
 		})
 	}
 
+	// Unblock downloaded file by removing Mark of the Web (Zone.Identifier) if present
+	_ = os.Remove(downloadPath + ":Zone.Identifier")
+
 	return nil
 }
 
@@ -290,6 +293,9 @@ func (s *UpdaterService) ApplyUpdate() error {
 		_ = os.Rename(oldPath, exePath)
 		return fmt.Errorf("failed to replace executable: %w", err)
 	}
+
+	// Remove Mark of the Web (Zone.Identifier) on the replaced executable
+	_ = os.Remove(exePath + ":Zone.Identifier")
 
 	return nil
 }
