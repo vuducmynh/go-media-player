@@ -45,9 +45,8 @@ func NewEngine(modelManager *ModelManager) (*Engine, error) {
 		modelManager: modelManager,
 	}
 
-	// Locate or prepare whisper-cli binary
-	_ = e.EnsureCLI()
-
+	// Note: whisper-cli is ensured lazily when Transcribe is called,
+	// never blocking app startup on network downloads.
 	return e, nil
 }
 

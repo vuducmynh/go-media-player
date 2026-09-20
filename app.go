@@ -80,6 +80,9 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app terminates
 func (a *App) shutdown(ctx context.Context) {
+	if a.studySvc != nil {
+		a.studySvc.CancelAll()
+	}
 	if a.streamer != nil {
 		a.streamer.Stop()
 	}

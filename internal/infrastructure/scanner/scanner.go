@@ -93,7 +93,11 @@ func (s *Scanner) ScanFolders(folders []string, progressCb func(library.ScanProg
 
 			name := d.Name()
 			if d.IsDir() {
-				if strings.HasPrefix(name, ".") || strings.EqualFold(name, "$RECYCLE.BIN") || strings.EqualFold(name, "System Volume Information") {
+				if strings.HasPrefix(name, ".") ||
+					strings.EqualFold(name, "node_modules") ||
+					strings.EqualFold(name, "AppData") ||
+					strings.EqualFold(name, "$RECYCLE.BIN") ||
+					strings.EqualFold(name, "System Volume Information") {
 					return filepath.SkipDir
 				}
 				return nil

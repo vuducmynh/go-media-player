@@ -315,3 +315,16 @@ func (s *StudyService) ImportBackup(srcZipPath string) (int, error) {
 	return storage.ImportBackup(srcZipPath)
 }
 
+// CancelAll aborts all running background transcription or download tasks
+func (s *StudyService) CancelAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, cancel := range s.activeCancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	s.activeCancels = make(map[string]context.CancelFunc)
+}
+
+

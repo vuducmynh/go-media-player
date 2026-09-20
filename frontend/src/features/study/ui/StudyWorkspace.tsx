@@ -634,7 +634,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
                         <span>Ẩn transcript</span>
                       </button>
                     </div>
-                    <div className="text-base text-white font-medium leading-relaxed">
+                    <div className="text-base text-white font-medium leading-relaxed break-words whitespace-normal">
                       {currentSentence?.transcript}
                     </div>
                     <div className="text-[11px] text-neutral-500 pt-1">
@@ -673,11 +673,11 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
                     </div>
 
                     {/* Word-level diff display: Correct words in normal white; missing/wrong words in gentle amber */}
-                    <div className="text-base font-medium leading-loose">
+                    <div className="text-base font-medium leading-loose flex flex-wrap items-baseline gap-x-1.5 gap-y-1 w-full break-words whitespace-normal">
                       {diffResult.diff.map((item, idx) => {
                         if (item.type === 'correct') {
                           return (
-                            <span key={idx} className="text-white mr-1.5">
+                            <span key={idx} className="text-white">
                               {item.reference}
                             </span>
                           );
@@ -686,7 +686,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
                           return (
                             <span
                               key={idx}
-                              className="text-amber-400 font-semibold underline decoration-amber-500 mr-1.5"
+                              className="text-amber-400 font-semibold underline decoration-amber-500"
                               title={item.answer ? `Bạn gõ sai: "${item.answer}"` : 'Từ này sai'}
                             >
                               {item.reference}
@@ -697,7 +697,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
                           return (
                             <span
                               key={idx}
-                              className="text-amber-300/85 font-medium mr-1.5"
+                              className="text-amber-300/85 font-medium"
                               title="Từ này bị thiếu trong câu trả lời"
                             >
                               {item.reference}
@@ -708,7 +708,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
                           return (
                             <span
                               key={idx}
-                              className="line-through text-rose-400/80 mr-1.5 text-sm font-normal"
+                              className="line-through text-rose-400/80 text-sm font-normal"
                               title="Từ thừa bạn đã gõ"
                             >
                               {item.answer}
