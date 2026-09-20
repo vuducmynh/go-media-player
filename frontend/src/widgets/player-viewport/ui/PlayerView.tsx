@@ -239,16 +239,30 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     setIsProcessingLesson(true);
     setProcessingPercentage(0);
     setProcessingSentenceCount(0);
-    setProcessingRecentSentences([]);
-    setProcessingStatus('Đang khởi động AI Whisper và phân đoạn câu...');
+    setProcessingStatus(
+      isYouTube
+        ? 'Đang chuẩn bị âm thanh YouTube và nạp mô hình AI...'
+        : 'Đang khởi động AI Whisper và phân đoạn câu...'
+    );
 
     try {
-      const newLesson = await WailsBridge.processLesson(
-        currentFile.fingerprint,
-        currentFile.title || currentFile.name,
-        currentFile.path,
-        modelId
-      );
+      let newLesson;
+      if (isYouTube) {
+        const videoId = currentFile.youtubeId || currentFile.id || currentFile.path;
+        newLesson = await WailsBridge.processYouTubeLesson(
+          currentFile.fingerprint,
+          currentFile.title || currentFile.name,
+          videoId,
+          modelId
+        );
+      } else {
+        newLesson = await WailsBridge.processLesson(
+          currentFile.fingerprint,
+          currentFile.title || currentFile.name,
+          currentFile.path,
+          modelId
+        );
+      }
       if (newLesson && newLesson.sentences && newLesson.sentences.length > 0) {
         setCurrentLesson(newLesson);
         setIsStudyModeOpen(true);
@@ -289,33 +303,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       console.warn('Could not fetch existing lesson:', e);
     }
 
-    // If YouTube video, try fast automatic captions extraction first
-    if (isYouTube) {
-      setIsProcessingLesson(true);
-      setProcessingPercentage(30);
-      setProcessingStatus('Đang lấy phụ đề tự động từ YouTube...');
-
-      try {
-        const videoId = currentFile.youtubeId || currentFile.id || currentFile.path;
-        const ytLesson = await WailsBridge.processYouTubeLesson(
-          currentFile.fingerprint,
-          currentFile.title || currentFile.name,
-          videoId,
-          ''
-        );
-        if (ytLesson && ytLesson.sentences && ytLesson.sentences.length > 0) {
-          setCurrentLesson(ytLesson);
-          setIsStudyModeOpen(true);
-          setIsProcessingLesson(false);
-          return;
-        }
-      } catch (err: any) {
-        console.warn('YouTube caption fetch failed, falling back to offline Whisper:', err);
-      }
-      setIsProcessingLesson(false);
-    }
-
-    // For local files or YouTube without captions: Check installed Whisper models
+    // Check installed Whisper models
     try {
       const models = await WailsBridge.getInstalledModels();
       const downloadedModels = models.filter((m) => m.downloaded);
@@ -698,7 +686,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       className="flex-1 h-full flex flex-col bg-fluent-bg-darker overflow-hidden relative"
     >
       {/* Video Viewport / Audio Visualizer Area */}
-      <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
+      <div
+        className={`relative bg-black flex items-center justify-center overflow-hidden transition-all duration-200 ${
+          isStudyModeOpen
+            ? isYouTube || currentFile.type === 'video'
+              ? 'h-[240px] sm:h-[280px] md:h-[320px] max-h-[40vh] border-b border-white/10 shrink-0'
+              : 'hidden'
+            : 'flex-1'
+        }`}
+      >
         {/* YouTube Viewport Container: always visible and fully interactive when isYouTube is true */}
         <div
           ref={ytContainerRef}
@@ -787,8 +783,38 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         )}
       </div>
 
-      {/* Listening Controls (Hold-to-Slow, A-B Repeat Loop, Jump Deltas) */}
-      <ListeningControls
+      {/* Intensive Study Mode (ListenSlice): Split View when Video, Full View when Audio */}
+      {isStudyModeOpen && currentLesson ? (
+        <div className="flex-1 flex flex-col overflow-hidden relative z-30 animate-fade-in">
+          <StudyWorkspace
+            lesson={currentLesson}
+            onClose={() => {
+              handleStudyPause();
+              setIsStudyModeOpen(false);
+            }}
+            onSaveAttempt={handleSaveAttempt}
+            onToggleStar={handleToggleStar}
+            onMarkDifficult={handleMarkDifficult}
+            onUpdateSentenceVisibility={handleUpdateSentenceVisibility}
+            onSeek={handleSeekTo}
+            onPlay={handleStudyPlay}
+            onPause={handleStudyPause}
+            onSetSpeed={handleSpeedChange}
+            isPlaying={activeIsPlaying}
+            currentTime={activeCurrentTime}
+            currentSpeed={normalSpeed}
+            isSlowHeld={isSlowHeld}
+            onSetSlowActive={setSlowSpeedActive}
+            slowSpeed={settings.slowSpeed || 0.5}
+            holdSlowKey={settings.holdSlowKey || 'KeyS'}
+            jumpSeconds={settings.jumpSeconds || 5}
+            isVideo={isYouTube || currentFile.type === 'video'}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Listening Controls (Hold-to-Slow, A-B Repeat Loop, Jump Deltas) */}
+          <ListeningControls
         jumpSeconds={settings.jumpSeconds || 5}
         playbackRate={activePlaybackRate}
         isSlowHeld={isSlowHeld}
@@ -1080,34 +1106,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Intensive Study Mode Overlay (ListenSlice) */}
-      {isStudyModeOpen && currentLesson && (
-        <div className="absolute inset-0 z-40 bg-fluent-bg-darker flex flex-col animate-fade-in">
-          <StudyWorkspace
-            lesson={currentLesson}
-            onClose={() => {
-              handleStudyPause();
-              setIsStudyModeOpen(false);
-            }}
-            onSaveAttempt={handleSaveAttempt}
-            onToggleStar={handleToggleStar}
-            onMarkDifficult={handleMarkDifficult}
-            onUpdateSentenceVisibility={handleUpdateSentenceVisibility}
-            onSeek={handleSeekTo}
-            onPlay={handleStudyPlay}
-            onPause={handleStudyPause}
-            onSetSpeed={handleSpeedChange}
-            isPlaying={activeIsPlaying}
-            currentTime={activeCurrentTime}
-            currentSpeed={normalSpeed}
-            isSlowHeld={isSlowHeld}
-            onSetSlowActive={setSlowSpeedActive}
-            slowSpeed={settings.slowSpeed || 0.5}
-            holdSlowKey={settings.holdSlowKey || 'KeyS'}
-            jumpSeconds={settings.jumpSeconds || 5}
-          />
-        </div>
+        </>
       )}
 
       {/* Whisper Model Downloader Modal */}

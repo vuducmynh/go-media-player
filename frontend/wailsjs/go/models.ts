@@ -432,6 +432,8 @@ export namespace study {
 	    sentences: Sentence[];
 	    processedBy: string;
 	    progress: LessonProgress;
+	    audioPath?: string;
+	    streamUrl?: string;
 	    // Go type: time
 	    createdAt: any;
 	    // Go type: time
@@ -451,6 +453,8 @@ export namespace study {
 	        this.sentences = this.convertValues(source["sentences"], Sentence);
 	        this.processedBy = source["processedBy"];
 	        this.progress = this.convertValues(source["progress"], LessonProgress);
+	        this.audioPath = source["audioPath"];
+	        this.streamUrl = source["streamUrl"];
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }

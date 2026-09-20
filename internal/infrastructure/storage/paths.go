@@ -172,3 +172,11 @@ func FindExistingBinary(filename string) (string, bool) {
 	}
 	return "", false
 }
+
+// GetYouTubeAudioDir returns the directory where extracted YouTube audio files are stored
+func GetYouTubeAudioDir() string {
+	pathsOnce.Do(initPaths)
+	audioDir := filepath.Join(cachedDataDir, "youtube_audio")
+	_ = os.MkdirAll(audioDir, 0755)
+	return audioDir
+}

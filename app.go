@@ -72,7 +72,7 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		fmt.Printf("Error initializing whisper engine: %v\n", err)
 	}
-	a.studySvc = application.NewStudyService(lessonStore, modelMgr, whisperEng)
+	a.studySvc = application.NewStudyService(lessonStore, modelMgr, whisperEng, a.streamer)
 
 	a.updaterSvc = application.NewUpdaterService()
 	a.updaterSvc.CleanupOldVersion()
@@ -186,6 +186,9 @@ func (a *App) GetYouTubeVideos() []media.MediaItem {
 func (a *App) RemoveYouTubeVideo(videoID string) error {
 	if a.youtubeSvc == nil {
 		return fmt.Errorf("youtube service not initialized")
+	}
+	if a.studySvc != nil {
+		a.studySvc.DeleteYouTubeAudio(videoID)
 	}
 	return a.youtubeSvc.RemoveYouTubeVideo(videoID)
 }
@@ -333,13 +336,14 @@ func (a *App) ProcessYouTubeLesson(fingerprint, title, videoID, modelID string) 
 	if a.studySvc == nil {
 		return nil, fmt.Errorf("study service not initialized")
 	}
-	return a.studySvc.CreateLessonFromYouTube(fingerprint, title, videoID, modelID, func(percent int) {
+	return a.studySvc.CreateLessonFromYouTube(fingerprint, title, videoID, modelID, func(p study.TranscribeProgress) {
 		wailsRuntime.EventsEmit(a.ctx, "lesson:transcribe:progress", map[string]interface{}{
 			"fingerprint":     fingerprint,
-			"percentage":      percent,
-			"status":          "Đang xử lý phụ đề YouTube...",
-			"sentenceCount":   0,
-			"recentSentences": []string{},
+			"percentage":      p.Percentage,
+			"status":          p.Status,
+			"latestSentence":  p.LatestSentence,
+			"sentenceCount":   p.SentenceCount,
+			"recentSentences": p.RecentSentences,
 		})
 	})
 }

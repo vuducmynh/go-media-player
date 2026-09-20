@@ -22,6 +22,7 @@ import {
   Bookmark,
   Repeat,
   Download,
+  Film,
 } from 'lucide-react';
 import {
   Lesson,
@@ -55,6 +56,7 @@ interface StudyWorkspaceProps {
   slowSpeed?: number;
   holdSlowKey?: string;
   jumpSeconds?: number;
+  isVideo?: boolean;
 }
 
 const SPEED_PRESETS = [0.5, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0];
@@ -78,6 +80,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
   slowSpeed = 0.5,
   holdSlowKey = 'KeyS',
   jumpSeconds = 5.0,
+  isVideo = false,
 }) => {
   const [lesson, setLesson] = useState<Lesson>(initialLesson);
   const [currentSentenceId, setCurrentSentenceId] = useState<string>(
@@ -90,6 +93,70 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
+
+  // Dual-source playback mode for YouTube lessons with offline audio
+  const [playbackSource, setPlaybackSource] = useState<'video' | 'audio'>('video');
+  const [offlineCurrentTime, setOfflineCurrentTime] = useState<number>(currentTime);
+  const [offlineIsPlaying, setOfflineIsPlaying] = useState<boolean>(false);
+  const offlineAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const effectiveCurrentTime = playbackSource === 'audio' ? offlineCurrentTime : currentTime;
+  const effectiveIsPlaying = playbackSource === 'audio' ? offlineIsPlaying : isPlaying;
+
+  const handleActiveSeek = useCallback((targetSec: number) => {
+    if (playbackSource === 'audio' && offlineAudioRef.current) {
+      offlineAudioRef.current.currentTime = targetSec;
+      setOfflineCurrentTime(targetSec);
+    } else {
+      onSeek(targetSec);
+    }
+  }, [playbackSource, onSeek]);
+
+  const handleActivePlay = useCallback(() => {
+    if (playbackSource === 'audio' && offlineAudioRef.current) {
+      offlineAudioRef.current.play().catch(() => {});
+    } else {
+      onPlay();
+    }
+  }, [playbackSource, onPlay]);
+
+  const handleActivePause = useCallback(() => {
+    if (playbackSource === 'audio' && offlineAudioRef.current) {
+      offlineAudioRef.current.pause();
+    } else {
+      onPause();
+    }
+  }, [playbackSource, onPause]);
+
+  const handleSwitchPlaybackSource = (newSource: 'video' | 'audio') => {
+    if (newSource === playbackSource) return;
+    if (newSource === 'audio') {
+      onPause();
+      if (offlineAudioRef.current) {
+        offlineAudioRef.current.currentTime = currentTime;
+        setOfflineCurrentTime(currentTime);
+        if (isPlaying) {
+          offlineAudioRef.current.play().catch(() => {});
+        }
+      }
+    } else {
+      if (offlineAudioRef.current) {
+        offlineAudioRef.current.pause();
+        onSeek(offlineAudioRef.current.currentTime);
+        if (offlineIsPlaying) {
+          onPlay();
+        }
+      }
+    }
+    setPlaybackSource(newSource);
+  };
+
+  // Sync speed to offline audio element if in audio mode
+  useEffect(() => {
+    if (offlineAudioRef.current) {
+      offlineAudioRef.current.playbackRate = isSlowHeld ? slowSpeed : currentSpeed;
+    }
+  }, [isSlowHeld, slowSpeed, currentSpeed]);
 
   // A-B Loop state
   const [loopA, setLoopA] = useState<number | null>(null);
@@ -147,7 +214,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
   const sentenceDuration = Math.max(0.1, ((currentSentence?.endMs ?? 0) - (currentSentence?.startMs ?? 0)) / 1000);
   const sentenceElapsed = Math.max(
     0,
-    Math.min(currentTime - (currentSentence?.startMs ?? 0) / 1000, sentenceDuration)
+    Math.min(effectiveCurrentTime - (currentSentence?.startMs ?? 0) / 1000, sentenceDuration)
   );
   const sentenceProgressPercent = Math.max(
     0,
@@ -156,37 +223,37 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
 
   // A-B Loop / Auto-pause when sentence end or loop end is reached
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!effectiveIsPlaying) return;
     if (isLoopActive && loopA !== null && loopB !== null && loopB > loopA) {
-      if (currentTime >= loopB) {
-        onSeek(loopA);
+      if (effectiveCurrentTime >= loopB) {
+        handleActiveSeek(loopA);
         return;
       }
-    } else if (currentSentence && currentTime >= endSec) {
-      onPause();
+    } else if (currentSentence && effectiveCurrentTime >= endSec) {
+      handleActivePause();
     }
-  }, [isPlaying, currentTime, isLoopActive, loopA, loopB, endSec, onPause, onSeek, currentSentence]);
+  }, [effectiveIsPlaying, effectiveCurrentTime, isLoopActive, loopA, loopB, endSec, handleActivePause, handleActiveSeek, currentSentence]);
 
   // A-B Loop handlers
   const handleSetLoopA = useCallback(() => {
-    setLoopA(currentTime);
-    if (loopB !== null && currentTime >= loopB) {
+    setLoopA(effectiveCurrentTime);
+    if (loopB !== null && effectiveCurrentTime >= loopB) {
       setLoopB(null);
       setIsLoopActive(false);
     }
-  }, [currentTime, loopB]);
+  }, [effectiveCurrentTime, loopB]);
 
   const handleSetLoopB = useCallback(() => {
-    if (loopA !== null && currentTime > loopA) {
-      setLoopB(currentTime);
+    if (loopA !== null && effectiveCurrentTime > loopA) {
+      setLoopB(effectiveCurrentTime);
       setIsLoopActive(true);
     } else {
       const a = Math.max(0, (currentSentence?.startMs ?? 0) / 1000);
       setLoopA(a);
-      setLoopB(currentTime);
+      setLoopB(effectiveCurrentTime);
       setIsLoopActive(true);
     }
-  }, [currentTime, loopA, currentSentence]);
+  }, [effectiveCurrentTime, loopA, currentSentence]);
 
   const handleToggleLoop = useCallback(() => {
     if (loopA !== null && loopB !== null && loopB > loopA) {
@@ -202,12 +269,12 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
 
   // Jump handlers (honors global jumpSeconds)
   const handleJumpBackward = useCallback(() => {
-    onSeek(Math.max(0, currentTime - jumpSeconds));
-  }, [currentTime, jumpSeconds, onSeek]);
+    handleActiveSeek(Math.max(0, effectiveCurrentTime - jumpSeconds));
+  }, [effectiveCurrentTime, jumpSeconds, handleActiveSeek]);
 
   const handleJumpForward = useCallback(() => {
-    onSeek(currentTime + jumpSeconds);
-  }, [currentTime, jumpSeconds, onSeek]);
+    handleActiveSeek(effectiveCurrentTime + jumpSeconds);
+  }, [effectiveCurrentTime, jumpSeconds, handleActiveSeek]);
 
   // Import lesson handler
   const handleImportLesson = useCallback(
@@ -229,10 +296,10 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
   const handlePlaySentence = useCallback(
     (sent: Sentence) => {
       const s = Math.max(0, sent.startMs / 1000 - 0.08);
-      onSeek(s);
-      onPlay();
+      handleActiveSeek(s);
+      handleActivePlay();
     },
-    [onSeek, onPlay]
+    [handleActiveSeek, handleActivePlay]
   );
 
   // Replay current sentence from start
@@ -243,20 +310,18 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
 
   // Play/Pause toggle button handler
   const handleTogglePlay = useCallback(() => {
-    if (isPlaying) {
-      onPause();
+    if (effectiveIsPlaying) {
+      handleActivePause();
     } else {
       if (!currentSentence) return;
       // If we are currently paused inside this sentence and not right at the end, resume
-      if (currentTime >= startSec && currentTime < endSec - 0.15) {
-        onPlay();
+      if (effectiveCurrentTime >= startSec && effectiveCurrentTime < endSec - 0.15) {
+        handleActivePlay();
       } else {
-        // Otherwise start playing from beginning of sentence
-        onSeek(startSec);
-        onPlay();
+        handlePlaySentence(currentSentence);
       }
     }
-  }, [isPlaying, currentSentence, currentTime, startSec, endSec, onPause, onPlay, onSeek]);
+  }, [effectiveIsPlaying, handleActivePause, handleActivePlay, currentSentence, effectiveCurrentTime, startSec, endSec, handlePlaySentence]);
 
   // Sentence Navigation
   const selectSentence = useCallback(
@@ -342,7 +407,7 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
     const target = startSec + ratio * (endSec - startSec);
-    onSeek(target);
+    handleActiveSeek(target);
   };
 
   // Keyboard shortcuts handling
@@ -558,6 +623,36 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
           >
             <Layers className="w-4 h-4" />
           </button>
+
+          {/* Dual Source Toggle for YouTube with offline audio */}
+          {lesson.source === 'youtube' && lesson.streamUrl && (
+            <div className="flex items-center p-1 bg-black/50 rounded-xl border border-white/10">
+              <button
+                onClick={() => handleSwitchPlaybackSource('video')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  playbackSource === 'video'
+                    ? 'bg-red-600/30 text-red-300 border border-red-500/40 shadow-sm'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Phát video YouTube có hình ảnh"
+              >
+                <Film className="w-3 h-3 text-red-400" />
+                <span className="hidden md:inline">Video</span>
+              </button>
+              <button
+                onClick={() => handleSwitchPlaybackSource('audio')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  playbackSource === 'audio'
+                    ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Phát từ file âm thanh offline (tua lặp 0ms siêu mượt, không tốn mạng)"
+              >
+                <Zap className="w-3 h-3 text-emerald-400" />
+                <span className="hidden md:inline">Audio (0ms)</span>
+              </button>
+            </div>
+          )}
 
           {/* Tab Selector: Listen vs Dictation */}
           <div className="flex items-center p-1 bg-black/50 rounded-xl border border-white/10">
@@ -1164,6 +1259,22 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
         lesson={lesson}
         onImportLesson={handleImportLesson}
       />
+
+      {/* Hidden Audio element for offline YouTube audio playback */}
+      {lesson.streamUrl && (
+        <audio
+          ref={offlineAudioRef}
+          src={lesson.streamUrl}
+          onTimeUpdate={() => {
+            if (offlineAudioRef.current) {
+              setOfflineCurrentTime(offlineAudioRef.current.currentTime);
+            }
+          }}
+          onPlay={() => setOfflineIsPlaying(true)}
+          onPause={() => setOfflineIsPlaying(false)}
+          onEnded={() => setOfflineIsPlaying(false)}
+        />
+      )}
     </div>
   );
 };

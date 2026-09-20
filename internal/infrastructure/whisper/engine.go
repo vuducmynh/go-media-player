@@ -118,7 +118,13 @@ func (e *Engine) EnsureCLI() error {
 func (e *Engine) ConvertTo16kHzWav(ctx context.Context, inputPath string) (string, error) {
 	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("gap_whisper_%d.wav", time.Now().UnixNano()))
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inputPath, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", tempWav)
+	ffmpegPath := "ffmpeg"
+	if p, found := storage.FindExistingBinary("ffmpeg.exe"); found {
+		ffmpegPath = p
+	}
+
+	cmd := exec.CommandContext(ctx, ffmpegPath, "-nostdin", "-y", "-i", inputPath, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", tempWav)
+	cmd.Stdin = nil
 	setHideWindow(cmd)
 
 	output, err := cmd.CombinedOutput()

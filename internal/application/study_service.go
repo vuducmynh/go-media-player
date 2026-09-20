@@ -9,6 +9,7 @@ import (
 	"go-audio-play/internal/domain/media"
 	"go-audio-play/internal/domain/study"
 	"go-audio-play/internal/infrastructure/storage"
+	"go-audio-play/internal/infrastructure/streamer"
 	"go-audio-play/internal/infrastructure/whisper"
 	"go-audio-play/internal/infrastructure/youtube"
 )
@@ -18,6 +19,8 @@ type StudyService struct {
 	modelManager  *whisper.ModelManager
 	whisperEngine *whisper.Engine
 	ytCaptions    *youtube.CaptionsExtractor
+	ytdlp         *whisper.YtDlpDownloader
+	streamer      *streamer.StreamServer
 	mu            sync.Mutex
 	activeCancels map[string]context.CancelFunc
 }
@@ -26,19 +29,29 @@ func NewStudyService(
 	lessonStore *storage.LessonStore,
 	modelManager *whisper.ModelManager,
 	whisperEngine *whisper.Engine,
+	streamer *streamer.StreamServer,
 ) *StudyService {
 	return &StudyService{
 		lessonStore:   lessonStore,
 		modelManager:  modelManager,
 		whisperEngine: whisperEngine,
 		ytCaptions:    youtube.NewCaptionsExtractor(),
+		ytdlp:         whisper.NewYtDlpDownloader(),
+		streamer:      streamer,
 		activeCancels: make(map[string]context.CancelFunc),
 	}
 }
 
 // GetLesson retrieves an existing lesson by fingerprint
 func (s *StudyService) GetLesson(fingerprint string) (*study.Lesson, error) {
-	return s.lessonStore.GetLesson(fingerprint)
+	lesson, err := s.lessonStore.GetLesson(fingerprint)
+	if err != nil || lesson == nil {
+		return nil, err
+	}
+	if lesson.AudioPath != "" && s.streamer != nil {
+		lesson.StreamURL = s.streamer.GetStreamURL(lesson.AudioPath)
+	}
+	return lesson, nil
 }
 
 // SaveLesson persists or updates a full lesson
@@ -140,40 +153,117 @@ func (s *StudyService) CreateLessonFromLocalMedia(
 	return lesson, nil
 }
 
-// CreateLessonFromYouTube creates a lesson from a YouTube video (prioritizing instant captions)
+// CreateLessonFromYouTube creates a lesson from a YouTube video using yt-dlp + Whisper AI
 func (s *StudyService) CreateLessonFromYouTube(
 	fingerprint string,
 	title string,
 	videoID string,
 	modelID string,
-	onProgress func(percent int),
+	onProgress func(p study.TranscribeProgress),
 ) (*study.Lesson, error) {
-	// 1. Attempt instantaneous YouTube captions extraction (<1s)
-	sentences, err := s.ytCaptions.ExtractCaptions(videoID)
-	if err == nil && len(sentences) > 0 {
-		durationMs := sentences[len(sentences)-1].EndMs
-		lesson := &study.Lesson{
-			ID:          fingerprint,
-			Fingerprint: fingerprint,
-			Title:       title,
-			Source:      media.SourceTypeYouTube,
-			DurationMs:  durationMs,
-			Sentences:   sentences,
-			ProcessedBy: "youtube-captions",
-			Progress: study.LessonProgress{
-				GuidedStage:       "listen",
-				CurrentSentenceID: sentences[0].ID,
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		if sErr := s.lessonStore.SaveLesson(lesson); sErr == nil {
-			return lesson, nil
-		}
+	if modelID == "" {
+		modelID = "large-v3-turbo-q5_0"
 	}
 
-	return nil, fmt.Errorf("video này không có phụ đề trực tiếp từ YouTube. Hãy sử dụng file media nội bộ để Whisper.cpp phân tích offline")
+	ctx, cancel := context.WithCancel(context.Background())
+	s.mu.Lock()
+	s.activeCancels[fingerprint] = cancel
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.activeCancels, fingerprint)
+		s.mu.Unlock()
+		cancel()
+	}()
+
+	// Stage 1: Download audio stream via yt-dlp (0% - 30%)
+	if onProgress != nil {
+		onProgress(study.TranscribeProgress{
+			Percentage: 2,
+			Status:     "Đang chuẩn bị tải âm thanh từ YouTube...",
+		})
+	}
+
+	audioPath, err := s.ytdlp.DownloadAudio(ctx, videoID, func(percent int, status string) {
+		if onProgress != nil {
+			mappedPct := 2 + int(float64(percent)*0.28)
+			onProgress(study.TranscribeProgress{
+				Percentage: mappedPct,
+				Status:     status,
+			})
+		}
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("transcription cancelled by user")
+		}
+		return nil, fmt.Errorf("không thể tải âm thanh từ YouTube: %w", err)
+	}
+
+	// Stage 2: Transcribe using Whisper AI (30% - 100%)
+	if onProgress != nil {
+		onProgress(study.TranscribeProgress{
+			Percentage: 30,
+			Status:     "Đang nhận diện giọng nói bằng AI Whisper...",
+		})
+	}
+
+	sentences, err := s.whisperEngine.Transcribe(ctx, audioPath, modelID, func(p study.TranscribeProgress) {
+		if onProgress != nil {
+			mappedPct := 30 + int(float64(p.Percentage)*0.70)
+			if mappedPct > 100 {
+				mappedPct = 100
+			}
+			p.Percentage = mappedPct
+			onProgress(p)
+		}
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("transcription cancelled by user")
+		}
+		return nil, fmt.Errorf("nhận diện giọng nói YouTube thất bại: %w", err)
+	}
+
+	if len(sentences) == 0 {
+		return nil, fmt.Errorf("không phát hiện được giọng nói trong video YouTube")
+	}
+
+	durationMs := sentences[len(sentences)-1].EndMs
+	streamURL := ""
+	if s.streamer != nil {
+		streamURL = s.streamer.GetStreamURL(audioPath)
+	}
+
+	lesson := &study.Lesson{
+		ID:          fingerprint,
+		Fingerprint: fingerprint,
+		Title:       title,
+		Source:      media.SourceTypeYouTube,
+		DurationMs:  durationMs,
+		Sentences:   sentences,
+		ProcessedBy: "whisper-" + modelID,
+		AudioPath:   audioPath,
+		StreamURL:   streamURL,
+		Progress: study.LessonProgress{
+			GuidedStage:       "listen",
+			CurrentSentenceID: sentences[0].ID,
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := s.lessonStore.SaveLesson(lesson); err != nil {
+		return nil, fmt.Errorf("save lesson failed: %w", err)
+	}
+
+	return lesson, nil
+}
+
+// DeleteYouTubeAudio deletes cached audio files for a YouTube video
+func (s *StudyService) DeleteYouTubeAudio(videoID string) {
+	s.ytdlp.DeleteAudio(videoID)
 }
 
 // SaveDictationAttempt records a dictation submission and updates sentence scoring metrics

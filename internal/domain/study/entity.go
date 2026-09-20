@@ -16,6 +16,8 @@ type Lesson struct {
 	Sentences   []Sentence       `json:"sentences"`
 	ProcessedBy string           `json:"processedBy"`
 	Progress    LessonProgress   `json:"progress"`
+	AudioPath   string           `json:"audioPath,omitempty"`
+	StreamURL   string           `json:"streamUrl,omitempty"`
 	CreatedAt   time.Time        `json:"createdAt"`
 	UpdatedAt   time.Time        `json:"updatedAt"`
 }

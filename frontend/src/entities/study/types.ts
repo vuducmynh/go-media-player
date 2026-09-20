@@ -62,6 +62,8 @@ export interface Lesson {
   sentences: Sentence[];
   processedBy: string;
   progress: LessonProgress;
+  audioPath?: string;
+  streamUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
