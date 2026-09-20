@@ -287,6 +287,26 @@ func TestCleanTranscriptText(t *testing.T) {
 			"What is it ? it is a dog .",
 			"What is it? It is a dog.",
 		},
+		{
+			"It is 5. 45 in the afternoon .",
+			"It is 5.45 in the afternoon.",
+		},
+		{
+			"The delay was 1. 0s exactly .",
+			"The delay was 1.0s exactly.",
+		},
+		{
+			"visit volcaenglish. Com for more lessons .",
+			"Visit volcaenglish.com for more lessons.",
+		},
+		{
+			"The laptop was$10, 000 in total .",
+			"The laptop was $10,000 in total.",
+		},
+		{
+			"It costs $ 500 each .",
+			"It costs $500 each.",
+		},
 	}
 
 	for _, tt := range tests {
@@ -294,5 +314,83 @@ func TestCleanTranscriptText(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("CleanTranscriptText(%q) = %q; want %q", tt.input, got, tt.expected)
 		}
+	}
+}
+
+func TestProcessSegmentsDecimalsAndDomains(t *testing.T) {
+	segmenter := NewSegmenter()
+
+	raw := []WhisperSegment{
+		{
+			Text:    "It is 5.45 and visit volcaenglish.com.",
+			Offsets: WhisperOffsets{From: 1000, To: 6000},
+			Tokens: []WhisperToken{
+				{Text: "It", Offsets: WhisperOffsets{From: 1000, To: 1200}},
+				{Text: " is", Offsets: WhisperOffsets{From: 1200, To: 1400}},
+				{Text: " 5.", Offsets: WhisperOffsets{From: 1400, To: 1700}},
+				{Text: "45", Offsets: WhisperOffsets{From: 1700, To: 2000}},
+				{Text: " and", Offsets: WhisperOffsets{From: 2000, To: 2300}},
+				{Text: " visit", Offsets: WhisperOffsets{From: 2300, To: 2600}},
+				{Text: " volcaenglish.", Offsets: WhisperOffsets{From: 2600, To: 3200}},
+				{Text: "com", Offsets: WhisperOffsets{From: 3200, To: 3500}},
+				{Text: ".", Offsets: WhisperOffsets{From: 3500, To: 3600}},
+			},
+		},
+	}
+
+	result := segmenter.ProcessSegments(raw)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 sentence, got %d: %+v", len(result), result)
+	}
+
+	expected := "It is 5.45 and visit volcaenglish.com."
+	if result[0].Transcript != expected {
+		t.Errorf("transcript wrong: got %q, want %q", result[0].Transcript, expected)
+	}
+}
+
+func TestProcessSegmentsClauseConnectorSplit(t *testing.T) {
+	segmenter := NewSegmenter()
+
+	// Simulating rapid speech lasting > 10s where speaker says "...better audio" (at 10s) followed by "and" (at 10.3s)
+	raw := []WhisperSegment{
+		{
+			Text:    "I bought a brand new microphone because I needed better audio and when I went outside it was windy",
+			Offsets: WhisperOffsets{From: 0, To: 16000},
+			Tokens: []WhisperToken{
+				{Text: "I", Offsets: WhisperOffsets{From: 0, To: 500}},
+				{Text: " bought", Offsets: WhisperOffsets{From: 500, To: 1200}},
+				{Text: " a", Offsets: WhisperOffsets{From: 1200, To: 1500}},
+				{Text: " brand", Offsets: WhisperOffsets{From: 1500, To: 2200}},
+				{Text: " new", Offsets: WhisperOffsets{From: 2200, To: 3000}},
+				{Text: " microphone", Offsets: WhisperOffsets{From: 3000, To: 4500}},
+				{Text: " because", Offsets: WhisperOffsets{From: 4500, To: 5500}},
+				{Text: " I", Offsets: WhisperOffsets{From: 5500, To: 6200}},
+				{Text: " needed", Offsets: WhisperOffsets{From: 6200, To: 7500}},
+				{Text: " better", Offsets: WhisperOffsets{From: 7500, To: 8800}},
+				{Text: " audio", Offsets: WhisperOffsets{From: 8800, To: 10000}},
+				// 300ms pause at 10s (>= 9500ms duration and >= 200ms gap before clause connector "and")
+				{Text: " and", Offsets: WhisperOffsets{From: 10300, To: 10600}},
+				{Text: " when", Offsets: WhisperOffsets{From: 10600, To: 11200}},
+				{Text: " I", Offsets: WhisperOffsets{From: 11200, To: 11800}},
+				{Text: " went", Offsets: WhisperOffsets{From: 11800, To: 12500}},
+				{Text: " outside", Offsets: WhisperOffsets{From: 12500, To: 13800}},
+				{Text: " it", Offsets: WhisperOffsets{From: 13800, To: 14500}},
+				{Text: " was", Offsets: WhisperOffsets{From: 14500, To: 15200}},
+				{Text: " windy", Offsets: WhisperOffsets{From: 15200, To: 16000}},
+			},
+		},
+	}
+
+	result := segmenter.ProcessSegments(raw)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 sentences split at clause connector, got %d: %+v", len(result), result)
+	}
+
+	if result[0].Transcript != "I bought a brand new microphone because I needed better audio." {
+		t.Errorf("sentence 0 wrong: %q", result[0].Transcript)
+	}
+	if result[1].Transcript != "And when I went outside it was windy." {
+		t.Errorf("sentence 1 wrong: %q", result[1].Transcript)
 	}
 }

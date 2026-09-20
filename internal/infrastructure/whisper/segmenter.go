@@ -20,11 +20,24 @@ var (
 	spacesOrdinalsRegex    = regexp.MustCompile(`(?i)\b(\d+)\s+(st|nd|rd|th)\b`)
 	spacesHyphenRegex      = regexp.MustCompile(`\b([A-Za-z]+)\s+-\s+([A-Za-z]+)\b`)
 	singleConsonantPrefix  = regexp.MustCompile(`(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b`)
-	punctPunctSpacingRegex = regexp.MustCompile(`([,.:;?!])([A-Za-z0-9])`)
-	pronounIRegex          = regexp.MustCompile(`(?i)\b(i)(['’](?:m|ve|ll|d))?\b`)
-	afterPunctRegex        = regexp.MustCompile(`([.!?]\s+)([a-z])`)
-	properNounsRegex       = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british)\b`)
-	runonTransitionRegex   = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)`)
+
+	// Punctuation spacing (selective: avoid inserting space inside numbers like 5.45, 10,000, 5:45)
+	punctLetterSpacingRegex  = regexp.MustCompile(`([;?!])([A-Za-z0-9])`)
+	colonLetterSpacingRegex  = regexp.MustCompile(`(:)([A-Za-z])`)
+	commaLetterSpacingRegex  = regexp.MustCompile(`(,)([A-Za-z])`)
+	periodLetterSpacingRegex = regexp.MustCompile(`(\.)([A-Za-z])`)
+
+	// Numbers, domains, and currency formatting
+	brokenDecimalRegex   = regexp.MustCompile(`\b(\d+)\.\s+(\d+[a-zA-Z]*)\b`)
+	brokenDomainRegex    = regexp.MustCompile(`(?i)\b([a-z0-9_-]+)\.\s*(com|net|org|io|edu|gov|co|uk|us|vn)\b`)
+	currencyPrefixRegex  = regexp.MustCompile(`([a-zA-Z0-9])([$€£¥₫])`)
+	currencySpacingRegex = regexp.MustCompile(`([$€£¥₫])\s+(\d)`)
+	numberCommaSpacing   = regexp.MustCompile(`\b(\d{1,3}),\s+(\d{3})\b`)
+
+	pronounIRegex        = regexp.MustCompile(`(?i)\b(i)(['’](?:m|ve|ll|d))?\b`)
+	afterPunctRegex      = regexp.MustCompile(`([.!?]\s+)([a-z])`)
+	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british)\b`)
+	runonTransitionRegex = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)`)
 )
 
 // WhisperJSONOutput represents the output structure produced by whisper-cli -ojf
@@ -108,14 +121,15 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 			sentences[prevIdx].Words = append(sentences[prevIdx].Words, currentWords...)
 		} else {
 			sentenceIndex := len(sentences) + 1
-			sentences = append(sentences, study.Sentence{
+			s := study.Sentence{
 				ID:         generateSentenceID(sentenceIndex),
 				Index:      sentenceIndex,
 				StartMs:    currentStartMs,
 				EndMs:      currentEndMs,
 				Transcript: text,
 				Words:      currentWords,
-			})
+			}
+			sentences = append(sentences, s)
 		}
 
 		currentWords = nil
@@ -124,7 +138,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 		currentEndMs = 0
 	}
 
-	for _, seg := range rawSegments {
+	for segIdx, seg := range rawSegments {
 		segText := strings.TrimSpace(seg.Text)
 		if segText == "" {
 			continue
@@ -132,11 +146,13 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 
 		// If tokens exist with offsets, assemble BPE tokens into proper whole words
 		if len(seg.Tokens) > 0 {
-			for _, tok := range seg.Tokens {
+			for tokIdx, tok := range seg.Tokens {
 				cleanToken := strings.TrimSpace(tok.Text)
 				if cleanToken == "" || strings.HasPrefix(cleanToken, "[_") || strings.HasPrefix(cleanToken, "<|") {
 					continue
 				}
+
+				nextTok := getNextToken(rawSegments, segIdx, tokIdx)
 
 				if currentStartMs < 0 {
 					currentStartMs = tok.Offsets.From
@@ -147,6 +163,12 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 				isPunct := isPunctuationOnly(cleanToken)
 				isContr := isContraction(cleanToken)
 
+				prevEnd := int64(0)
+				if len(currentWords) > 0 {
+					prevEnd = currentWords[len(currentWords)-1].EndMs
+				}
+				gapMs := tok.Offsets.From - prevEnd
+
 				if isPunct {
 					// Punctuation attaches directly without leading space (e.g. "Hello" + "." -> "Hello.")
 					currentText.WriteString(cleanToken)
@@ -154,9 +176,11 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 						currentWords[len(currentWords)-1].Text += cleanToken
 						currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
 					}
-					// Check if this punctuation terminates a sentence
+					// Check if this punctuation terminates a sentence (skip if next token is TLD or decimal continuation)
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						finalizeSentence()
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) {
+							finalizeSentence()
+						}
 					}
 				} else if isContr {
 					// Contraction suffix attaches directly without space (e.g. "I" + "'m" -> "I'm")
@@ -172,8 +196,9 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 							Confidence: tok.Prob,
 						})
 					}
-				} else if !isWordStart && currentText.Len() > 0 && len(currentWords) > 0 {
+				} else if !isWordStart && currentText.Len() > 0 && len(currentWords) > 0 && gapMs < 150 {
 					// BPE sub-word continuation (e.g. "compreh" + "ensible" -> "comprehensible", "vacuum" + "ing" -> "vacuuming")
+					// Must have tight gap (< 150ms) to ensure it's not a new word at segment boundary
 					currentText.WriteString(cleanToken)
 					currentWords[len(currentWords)-1].Text += cleanToken
 					currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
@@ -182,13 +207,27 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 					}
 				} else {
 					// New word start!
-					// Check for natural speech pause boundary (>= 750ms silence) or capitalized sentence starter (>= 350ms)
+					// Check speech pauses and clause transitions for balanced sentence length
 					if len(currentWords) >= 3 {
-						prevEnd := currentWords[len(currentWords)-1].EndMs
-						gapMs := tok.Offsets.From - prevEnd
+						currDur := prevEnd - currentStartMs
+
 						if gapMs >= 750 {
+							// 1. Natural strong speech pause boundary (>= 750ms silence)
 							finalizeSentence()
 						} else if gapMs >= 350 && isSentenceStartWord(cleanToken) {
+							// 2. Capitalized sentence starter with soft pause (>= 350ms)
+							finalizeSentence()
+						} else if currDur >= 7000 && gapMs >= 350 {
+							// 3. Sentence >= 7s and speaker paused for breath (>= 350ms)
+							finalizeSentence()
+						} else if currDur >= 9500 && gapMs >= 200 && isClauseConnector(cleanToken) {
+							// 4. Sentence >= 9.5s, encountering clause connector (and, so, but, because, when...) with slight pause (>= 200ms)
+							finalizeSentence()
+						} else if currDur >= 14000 && gapMs >= 200 {
+							// 5. Sentence reaching 14s, split at any word boundary with slight pause (>= 200ms)
+							finalizeSentence()
+						} else if currDur >= 18000 || len(currentWords) >= 25 {
+							// 6. Hard safety limit: avoid run-ons > 18s or > 25 words in study dictation mode
 							finalizeSentence()
 						}
 					}
@@ -211,7 +250,9 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 
 					// Check if this word terminates a sentence (e.g. " 2.", " now.", " world!")
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						finalizeSentence()
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) {
+							finalizeSentence()
+						}
 					}
 				}
 			}
@@ -334,10 +375,32 @@ func CleanTranscriptText(text string) string {
 		text = singleConsonantPrefix.ReplaceAllString(text, "$1$2$3")
 	}
 
-	// 6. Ensure space after punctuation if followed immediately by letter/number (e.g. "Hello.Are" -> "Hello. Are")
-	text = punctPunctSpacingRegex.ReplaceAllString(text, "$1 $2")
+	// 6. Ensure space after punctuation if followed immediately by letter/number (selective to protect numbers & domains)
+	text = punctLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
+	text = colonLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
+	text = commaLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
+	text = periodLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
 
-	// 7. Fix lowercase English pronoun "I" and its contractions (e.g. "i" -> "I", "i'm" -> "I'm")
+	// 7. Fix currency formatting and spacing (e.g. "was$10, 000" -> "was $10,000", "$ 50" -> "$50")
+	text = currencyPrefixRegex.ReplaceAllString(text, "$1 $2")
+	text = currencySpacingRegex.ReplaceAllString(text, "$1$2")
+	for i := 0; i < 2; i++ {
+		text = numberCommaSpacing.ReplaceAllString(text, "$1,$2")
+	}
+
+	// 8. Fix decimals and measurements (e.g. "5. 45" -> "5.45", "1. 0s" -> "1.0s")
+	text = brokenDecimalRegex.ReplaceAllString(text, "$1.$2")
+
+	// 9. Fix web domain formatting (e.g. "volcaenglish. Com" -> "volcaenglish.com")
+	text = brokenDomainRegex.ReplaceAllStringFunc(text, func(m string) string {
+		parts := brokenDomainRegex.FindStringSubmatch(m)
+		if len(parts) == 3 {
+			return parts[1] + "." + strings.ToLower(parts[2])
+		}
+		return m
+	})
+
+	// 10. Fix lowercase English pronoun "I" and its contractions (e.g. "i" -> "I", "i'm" -> "I'm")
 	text = pronounIRegex.ReplaceAllStringFunc(text, func(m string) string {
 		if strings.HasPrefix(m, "i") {
 			return "I" + m[1:]
@@ -345,7 +408,7 @@ func CleanTranscriptText(text string) string {
 		return m
 	})
 
-	// 8. Capitalize common proper nouns
+	// 11. Capitalize common proper nouns
 	text = properNounsRegex.ReplaceAllStringFunc(text, func(m string) string {
 		runes := []rune(m)
 		if len(runes) > 0 && unicode.IsLower(runes[0]) {
@@ -355,7 +418,7 @@ func CleanTranscriptText(text string) string {
 		return m
 	})
 
-	// 9. Capitalize letter following sentence punctuation (. ? !)
+	// 12. Capitalize letter following sentence punctuation (. ? !)
 	text = afterPunctRegex.ReplaceAllStringFunc(text, func(m string) string {
 		parts := afterPunctRegex.FindStringSubmatch(m)
 		if len(parts) == 3 {
@@ -364,13 +427,13 @@ func CleanTranscriptText(text string) string {
 		return m
 	})
 
-	// 10. Split run-on clauses where a lowercase word is followed immediately by a capitalized sentence transition
+	// 13. Split run-on clauses where a lowercase word is followed immediately by a capitalized sentence transition
 	text = runonTransitionRegex.ReplaceAllString(text, "$1. $2")
 
-	// 11. Collapse any multiple consecutive spaces
+	// 14. Collapse any multiple consecutive spaces
 	text = strings.Join(strings.Fields(text), " ")
 
-	// 12. Capitalize first letter of sentence if lowercase
+	// 15. Capitalize first letter of sentence if lowercase
 	runes := []rune(text)
 	if len(runes) > 0 && unicode.IsLower(runes[0]) {
 		runes[0] = unicode.ToUpper(runes[0])
@@ -385,6 +448,51 @@ func isSentenceEnd(word string) bool {
 		return false
 	}
 	return sentenceEndRegex.MatchString(word)
+}
+
+func isKnownTLD(s string) bool {
+	lower := strings.ToLower(strings.Trim(s, " \t\r\n,.:;?!\"'"))
+	switch lower {
+	case "com", "org", "net", "io", "edu", "gov", "co", "uk", "us", "vn", "de", "jp", "cn":
+		return true
+	}
+	return false
+}
+
+func isDecimalContinuation(s string) bool {
+	trimmed := strings.Trim(s, " \t\r\n,.:;?!\"'")
+	if trimmed == "" {
+		return false
+	}
+	r := []rune(trimmed)
+	return unicode.IsDigit(r[0])
+}
+
+func isClauseConnector(word string) bool {
+	lower := strings.ToLower(strings.Trim(word, " \t\r\n,.:;?!\"'"))
+	switch lower {
+	case "and", "but", "so", "because", "when", "while", "where", "although", "though", "if", "then", "now", "or":
+		return true
+	}
+	return false
+}
+
+func getNextToken(segments []WhisperSegment, segIdx int, tokIdx int) string {
+	if segIdx < len(segments) {
+		if tokIdx+1 < len(segments[segIdx].Tokens) {
+			return strings.TrimSpace(segments[segIdx].Tokens[tokIdx+1].Text)
+		}
+		// Look ahead to next non-empty segment
+		for nextSegIdx := segIdx + 1; nextSegIdx < len(segments); nextSegIdx++ {
+			for _, t := range segments[nextSegIdx].Tokens {
+				trimmed := strings.TrimSpace(t.Text)
+				if trimmed != "" && !strings.HasPrefix(trimmed, "[_") && !strings.HasPrefix(trimmed, "<|") {
+					return trimmed
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func isSentenceStartWord(word string) bool {

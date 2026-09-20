@@ -140,18 +140,50 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     onEnded: handleYouTubeEnded,
   });
 
-  // Active playback state dynamically resolving between YouTube and local media
-  const activeIsPlaying = isYouTube ? ytPlayer.isPlaying : isPlaying;
-  const activeCurrentTime = isYouTube ? ytPlayer.currentTime : currentTime;
-  const activeDuration = isYouTube ? ytPlayer.duration : duration;
+  // Study Mode Dual Playback Source ('video' | 'audio')
+  const [studyPlaybackSource, setStudyPlaybackSource] = useState<'video' | 'audio'>('video');
+  const [offlineAudioPlaying, setOfflineAudioPlaying] = useState<boolean>(false);
+  const [offlineAudioTime, setOfflineAudioTime] = useState<number>(0);
+  const offlineAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const isOfflineAudioMode = isStudyModeOpen && studyPlaybackSource === 'audio' && Boolean(currentLesson?.streamUrl);
+
+  // Active playback state dynamically resolving between YouTube, local media, and offline study audio
+  const activeIsPlaying = isOfflineAudioMode
+    ? offlineAudioPlaying
+    : isYouTube
+      ? ytPlayer.isPlaying
+      : isPlaying;
+  const activeCurrentTime = isOfflineAudioMode
+    ? offlineAudioTime
+    : isYouTube
+      ? ytPlayer.currentTime
+      : currentTime;
+  const activeDuration = isOfflineAudioMode
+    ? (offlineAudioRef.current?.duration && !isNaN(offlineAudioRef.current.duration) && offlineAudioRef.current.duration > 0
+        ? offlineAudioRef.current.duration
+        : (currentLesson?.durationMs ? currentLesson.durationMs / 1000 : (isYouTube ? ytPlayer.duration : duration)))
+    : isYouTube
+      ? ytPlayer.duration
+      : duration;
   const activePlaybackRate = isYouTube ? ytPlayer.playbackRate : playbackRate;
   const activeVolume = isYouTube ? ytPlayer.volume : volume;
   const activeIsMuted = isYouTube ? ytPlayer.isMuted : isMuted;
+
+  // Sync playback rate to offline audio element
+  useEffect(() => {
+    if (offlineAudioRef.current) {
+      offlineAudioRef.current.playbackRate = isSlowHeld ? settings.slowSpeed || 0.5 : normalSpeed;
+    }
+  }, [isSlowHeld, settings.slowSpeed, normalSpeed]);
 
   // When current file changes, restore saved state, A-B loop points, and existing lesson
   useEffect(() => {
     setIsStudyModeOpen(false);
     setCurrentLesson(null);
+    setStudyPlaybackSource('video');
+    setOfflineAudioPlaying(false);
+    setOfflineAudioTime(0);
 
     if (!currentFile) {
       setIsPlaying(false);
@@ -243,6 +275,10 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   // Study playback helpers
   const handleStudyPlay = () => {
     if (!currentFile) return;
+    if (isOfflineAudioMode) {
+      offlineAudioRef.current?.play().catch(() => {});
+      return;
+    }
     if (isYouTube) {
       ytPlayer.play();
     } else {
@@ -252,6 +288,10 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
   const handleStudyPause = () => {
     if (!currentFile) return;
+    if (isOfflineAudioMode) {
+      offlineAudioRef.current?.pause();
+      return;
+    }
     if (isYouTube) {
       ytPlayer.pause();
     } else {
@@ -267,6 +307,54 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         loopB
       );
     }
+  };
+
+  const handleSwitchStudyPlaybackSource = (newSource: 'video' | 'audio') => {
+    if (newSource === studyPlaybackSource) return;
+
+    if (newSource === 'audio') {
+      // Transition from video to audio
+      const wasPlaying = isYouTube ? ytPlayer.isPlaying : isPlaying;
+      const targetTime = isYouTube ? ytPlayer.currentTime : currentTime;
+
+      if (isYouTube) {
+        ytPlayer.pause();
+      } else {
+        mediaRef.current?.pause();
+        setIsPlaying(false);
+      }
+
+      if (offlineAudioRef.current) {
+        offlineAudioRef.current.currentTime = targetTime;
+        setOfflineAudioTime(targetTime);
+        if (wasPlaying) {
+          offlineAudioRef.current.play().catch(() => {});
+        }
+      }
+    } else {
+      // Transition from audio to video
+      const wasPlaying = offlineAudioPlaying;
+      const targetTime = offlineAudioTime;
+
+      if (offlineAudioRef.current) {
+        offlineAudioRef.current.pause();
+      }
+
+      if (isYouTube) {
+        ytPlayer.seekTo(targetTime);
+        if (wasPlaying) {
+          ytPlayer.play();
+        }
+      } else if (mediaRef.current) {
+        mediaRef.current.currentTime = targetTime;
+        setCurrentTime(targetTime);
+        if (wasPlaying) {
+          mediaRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+        }
+      }
+    }
+
+    setStudyPlaybackSource(newSource);
   };
 
   const handleCancelLessonProcessing = async () => {
@@ -559,6 +647,17 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const handleTogglePlay = () => {
     if (!currentFile) return;
 
+    if (isOfflineAudioMode) {
+      const audio = offlineAudioRef.current;
+      if (!audio) return;
+      if (audio.paused) {
+        audio.play().catch(() => {});
+      } else {
+        audio.pause();
+      }
+      return;
+    }
+
     if (isYouTube) {
       ytPlayer.togglePlay();
       onUpdateFileProgress(
@@ -590,6 +689,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   };
 
   const handleSeekTo = (seconds: number) => {
+    if (isOfflineAudioMode) {
+      const audio = offlineAudioRef.current;
+      if (audio) {
+        audio.currentTime = seconds;
+        setOfflineAudioTime(seconds);
+      }
+      return;
+    }
+
     if (isYouTube) {
       ytPlayer.seekTo(seconds);
     } else {
@@ -613,6 +721,16 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   };
 
   const handleSeekDelta = (delta: number) => {
+    if (isOfflineAudioMode) {
+      const audio = offlineAudioRef.current;
+      if (audio) {
+        const nextTime = Math.max(0, Math.min(audio.currentTime + delta, activeDuration));
+        audio.currentTime = nextTime;
+        setOfflineAudioTime(nextTime);
+      }
+      return;
+    }
+
     if (isYouTube) {
       ytPlayer.seekDelta(delta);
       return;
@@ -767,9 +885,11 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       <div
         className={`relative bg-black flex items-center justify-center overflow-hidden transition-all duration-200 ${
           isStudyModeOpen
-            ? isYouTube || currentFile.type === 'video'
-              ? 'h-[240px] sm:h-[280px] md:h-[320px] max-h-[40vh] border-b border-white/10 shrink-0'
-              : 'hidden'
+            ? studyPlaybackSource === 'audio'
+              ? 'hidden'
+              : isYouTube || currentFile.type === 'video'
+                ? 'h-[240px] sm:h-[280px] md:h-[320px] max-h-[40vh] border-b border-white/10 shrink-0'
+                : 'hidden'
             : 'flex-1'
         }`}
       >
@@ -900,6 +1020,8 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             holdSlowKey={settings.holdSlowKey || 'KeyS'}
             jumpSeconds={settings.jumpSeconds || 5}
             isVideo={isYouTube || currentFile.type === 'video'}
+            playbackSource={studyPlaybackSource}
+            onPlaybackSourceChange={handleSwitchStudyPlaybackSource}
           />
         </div>
       ) : (
@@ -1240,6 +1362,22 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         activeModelName={activeModelName}
         onCancel={handleCancelLessonProcessing}
       />
+
+      {/* Hidden Audio element for offline YouTube audio playback in study mode */}
+      {currentLesson?.streamUrl && (
+        <audio
+          ref={offlineAudioRef}
+          src={currentLesson.streamUrl}
+          onTimeUpdate={() => {
+            if (offlineAudioRef.current) {
+              setOfflineAudioTime(offlineAudioRef.current.currentTime);
+            }
+          }}
+          onPlay={() => setOfflineAudioPlaying(true)}
+          onPause={() => setOfflineAudioPlaying(false)}
+          onEnded={() => setOfflineAudioPlaying(false)}
+        />
+      )}
     </div>
   );
 };

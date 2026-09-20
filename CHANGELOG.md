@@ -4,6 +4,28 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.7] - 21/09/2026
+
+# Tối ưu Chế độ Audio Ngoại Tuyến (Ẩn Video & Đồng Bộ Điều Khiển), Chuẩn Hóa Số Thập Phân & Ngắt Câu Độc Thoại Thông Minh
+
+Bản cập nhật v1.3.7 hoàn thiện trải nghiệm luyện nghe sâu với chế độ Âm thanh ngoại tuyến (Offline Audio) giúp ẩn hoàn toàn khung video để tập trung 100% vào việc nghe, đồng bộ đồng nhất các nút điều khiển phát/dừng, sửa triệt để lỗi tách nhầm số thập phân/tên miền web, và áp dụng cơ chế ngắt câu thông minh theo liên từ và nhịp thở (Clause & Pause Splitting) cho các bài độc thoại dài.
+
+### Cải tiến & Khắc phục lỗi (4)
+- **Tối ưu hóa Chế độ Audio Ngoại Tuyến (Offline Audio Mode)**:
+  - Khi chuyển từ tab Video sang "Audio offline", khung video YouTube tự động được ẩn hoàn toàn (`hidden`), giải phóng tối đa không gian màn hình cho giao diện chép chính tả và luyện nghe sâu.
+  - Chuyển đổi mượt mà giữa Video và Audio giữ nguyên chính xác vị trí phát (timestamp) hiện tại.
+  - Đồng bộ toàn diện nút Play/Pause (icon đổi trạng thái chuẩn xác), thanh tua thời gian (scrubber), phím tắt Spacebar, phím tua lùi/tiến và phím giữ nghe chậm `S`.
+- **Bảo vệ số thập phân, đơn vị đo lường & tên miền website**:
+  - Khắc phục lỗi tách câu nhầm khi gặp số có dấu chấm (`5.45`, `1.0s`) hoặc địa chỉ website (`volcaenglish.com`), ngăn ngừa tình trạng tách thành hai câu kỳ quặc như `5.` và `45`.
+  - Tự động chuẩn hóa dấu cách tiền tệ và dấu phẩy phân tách hàng nghìn (`was$10, 000` -> `was $10,000`, `$ 500` -> `$500`).
+- **Phân đoạn câu độc thoại thông minh cho Luyện nghe sâu (Clause & Pause Splitting)**:
+  - Loại bỏ hoàn toàn các câu độc thoại kéo dài bất thường (20s - 55s) do người nói nói nhanh không có dấu chấm.
+  - Tự động ngắt câu tại khoảng dừng thở tự nhiên ($\ge 350$ms khi câu $\ge 7$s) hoặc tại các liên từ liên kết câu (*and*, *so*, *but*, *because*, *when*, *now*, *then*... khi câu $\ge 9.5$s kèm khoảng nghỉ $\ge 200$ms).
+  - Khóa độ dài tối đa $\le 18$ giây / 25 từ, bảo đảm các câu học luôn nằm trong "khung vàng" 6–12 giây lý tưởng cho việc ghi nhớ và chép chính tả.
+- **Tự động gắn kết token âm thanh BPE chuẩn xác**: Ngăn ngừa tình trạng token đầu tiên của khối âm thanh bị dán nhầm vào câu trước khi có khoảng lặng giữa các câu.
+
+---
+
 ## [v1.3.6] - 21/09/2026
 
 # Ngắt câu theo khoảng lặng (Pause Boundary), Viết hoa đại từ "I" & Khởi tạo Whisper Prompt Conditioning

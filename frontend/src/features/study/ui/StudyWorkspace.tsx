@@ -58,6 +58,8 @@ interface StudyWorkspaceProps {
   jumpSeconds?: number;
   isVideo?: boolean;
   onRemakeLesson?: () => void;
+  playbackSource?: 'video' | 'audio';
+  onPlaybackSourceChange?: (source: 'video' | 'audio') => void;
 }
 
 const SPEED_PRESETS = [0.5, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0];
@@ -83,6 +85,8 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
   jumpSeconds = 5.0,
   isVideo = false,
   onRemakeLesson,
+  playbackSource = 'video',
+  onPlaybackSourceChange,
 }) => {
   const [lesson, setLesson] = useState<Lesson>(initialLesson);
   const [currentSentenceId, setCurrentSentenceId] = useState<string>(
@@ -96,69 +100,17 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
 
-  // Dual-source playback mode for YouTube lessons with offline audio
-  const [playbackSource, setPlaybackSource] = useState<'video' | 'audio'>('video');
-  const [offlineCurrentTime, setOfflineCurrentTime] = useState<number>(currentTime);
-  const [offlineIsPlaying, setOfflineIsPlaying] = useState<boolean>(false);
-  const offlineAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  const effectiveCurrentTime = playbackSource === 'audio' ? offlineCurrentTime : currentTime;
-  const effectiveIsPlaying = playbackSource === 'audio' ? offlineIsPlaying : isPlaying;
-
-  const handleActiveSeek = useCallback((targetSec: number) => {
-    if (playbackSource === 'audio' && offlineAudioRef.current) {
-      offlineAudioRef.current.currentTime = targetSec;
-      setOfflineCurrentTime(targetSec);
-    } else {
-      onSeek(targetSec);
-    }
-  }, [playbackSource, onSeek]);
-
-  const handleActivePlay = useCallback(() => {
-    if (playbackSource === 'audio' && offlineAudioRef.current) {
-      offlineAudioRef.current.play().catch(() => {});
-    } else {
-      onPlay();
-    }
-  }, [playbackSource, onPlay]);
-
-  const handleActivePause = useCallback(() => {
-    if (playbackSource === 'audio' && offlineAudioRef.current) {
-      offlineAudioRef.current.pause();
-    } else {
-      onPause();
-    }
-  }, [playbackSource, onPause]);
+  // Playback bindings unified with parent PlayerView
+  const effectiveCurrentTime = currentTime;
+  const effectiveIsPlaying = isPlaying;
+  const handleActiveSeek = onSeek;
+  const handleActivePlay = onPlay;
+  const handleActivePause = onPause;
 
   const handleSwitchPlaybackSource = (newSource: 'video' | 'audio') => {
     if (newSource === playbackSource) return;
-    if (newSource === 'audio') {
-      onPause();
-      if (offlineAudioRef.current) {
-        offlineAudioRef.current.currentTime = currentTime;
-        setOfflineCurrentTime(currentTime);
-        if (isPlaying) {
-          offlineAudioRef.current.play().catch(() => {});
-        }
-      }
-    } else {
-      if (offlineAudioRef.current) {
-        offlineAudioRef.current.pause();
-        onSeek(offlineAudioRef.current.currentTime);
-        if (offlineIsPlaying) {
-          onPlay();
-        }
-      }
-    }
-    setPlaybackSource(newSource);
+    onPlaybackSourceChange?.(newSource);
   };
-
-  // Sync speed to offline audio element if in audio mode
-  useEffect(() => {
-    if (offlineAudioRef.current) {
-      offlineAudioRef.current.playbackRate = isSlowHeld ? slowSpeed : currentSpeed;
-    }
-  }, [isSlowHeld, slowSpeed, currentSpeed]);
 
   // A-B Loop state
   const [loopA, setLoopA] = useState<number | null>(null);
@@ -1273,22 +1225,6 @@ export const StudyWorkspace: React.FC<StudyWorkspaceProps> = ({
         lesson={lesson}
         onImportLesson={handleImportLesson}
       />
-
-      {/* Hidden Audio element for offline YouTube audio playback */}
-      {lesson.streamUrl && (
-        <audio
-          ref={offlineAudioRef}
-          src={lesson.streamUrl}
-          onTimeUpdate={() => {
-            if (offlineAudioRef.current) {
-              setOfflineCurrentTime(offlineAudioRef.current.currentTime);
-            }
-          }}
-          onPlay={() => setOfflineIsPlaying(true)}
-          onPause={() => setOfflineIsPlaying(false)}
-          onEnded={() => setOfflineIsPlaying(false)}
-        />
-      )}
     </div>
   );
 };
