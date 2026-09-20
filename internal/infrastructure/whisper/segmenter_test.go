@@ -331,6 +331,18 @@ func TestCleanTranscriptText(t *testing.T) {
 			"I have hair my. Hair is wet and do you have a. Lot of hair",
 			"I have hair my hair is wet and do you have a lot of hair",
 		},
+		{
+			"Study at C E F Rlevel and practice with PDFfile .",
+			"Study at CEFR level and practice with PDF file.",
+		},
+		{
+			"Yeah,$15 to $20 for dinner with barack obama .",
+			"Yeah, $15 to $20 for dinner with Barack Obama.",
+		},
+		{
+			"I'm going to start with the.",
+			"I'm going to start with the...",
+		},
 	}
 
 	for _, tt := range tests {

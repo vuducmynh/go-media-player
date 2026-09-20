@@ -21,11 +21,15 @@ var (
 	spacesHyphenRegex      = regexp.MustCompile(`\b([A-Za-z]+)\s+-\s+([A-Za-z]+)\b`)
 
 	// Sub-word prefix clusters & bound morphemes
-	subwordPrefixRegex = regexp.MustCompile(`(^|\s)(wr|kn|cl|cr|tr|bl|br|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|wh|ch|Wr|Kn|Cl|Cr|Tr|Bl|Br|Fl|Fr|Gl|Gr|Pl|Pr|Sc|Sk|Sl|Sm|Sn|Sp|Sw|Wh|Ch|[b-hj-zB-HJ-Z])\s+([a-z]{2,})\b`)
+	subwordPrefixRegex = regexp.MustCompile(`(^|\s)(wr|kn|cl|cr|tr|bl|br|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|wh|ch|Wr|Kn|Cl|Cr|Tr|Bl|Br|Fl|Fr|Gl|Gr|Pl|Pr|Sc|Sk|Sl|Sm|Sn|Sp|Sw|Wh|Ch|[b-hj-z])\s+([a-z]{2,})\b`)
 	boundSuffixRegex   = regexp.MustCompile(`(?i)\b([a-zA-Z]{2,})\s+(ing|ed|ly|es|tion|sion|ment|ness|ible|ables|ish|ful|less|ize|ise)\b`)
-	specialWordMergers = regexp.MustCompile(`(?i)\b(?:hes\s+itating|can\s+adian|CE\s+FR|Circle\s+Kand)\b`)
+	specialWordMergers = regexp.MustCompile(`(?i)\b(?:hes\s+itating|can\s+adian|c\s*e\s*f\s*r(?:\s*level)?|circle\s+kand)\b`)
+	spacedAcronym4     = regexp.MustCompile(`\b([A-Z])\s+([A-Z])\s+([A-Z])\s+([A-Z])\b`)
+	spacedAcronym3     = regexp.MustCompile(`\b([A-Z])\s+([A-Z])\s+([A-Z])\b`)
+	acronymNounSplit   = regexp.MustCompile(`\b([A-Z]{2,})([a-z]{2,})\b`)
 	danglingWordRegex  = regexp.MustCompile(`(?i)\b(?:my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.["]?$`)
 	danglingWordInline = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.\s+([a-zA-Z])`)
+	danglingWordTrailing = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.$`)
 
 	// Punctuation spacing (selective: avoid inserting space inside numbers like 5.45, 10,000, 5:45)
 	punctLetterSpacingRegex  = regexp.MustCompile(`([;?!])([A-Za-z0-9])`)
@@ -33,6 +37,7 @@ var (
 	commaLetterSpacingRegex  = regexp.MustCompile(`(,)([A-Za-z])`)
 	periodLetterSpacingRegex = regexp.MustCompile(`(\.)([A-Za-z])`)
 	periodCurrencyRegex      = regexp.MustCompile(`(\.)\s*([$€£¥₫])`)
+	commaCurrencyRegex       = regexp.MustCompile(`([,;:])\s*([$€£¥₫])`)
 
 	// Numbers, domains, and currency formatting
 	brokenDecimalRegex   = regexp.MustCompile(`\b(\d+)\.\s+(\d+[a-zA-Z]*)\b`)
@@ -43,8 +48,8 @@ var (
 
 	pronounIRegex        = regexp.MustCompile(`(?i)\b(i)(['’](?:m|ve|ll|d))?\b`)
 	afterPunctRegex      = regexp.MustCompile(`([.!?]\s+)([a-z])`)
-	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|obama)\b`)
-	runonTransitionRegex = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)`)
+	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama)\b`)
+	runonTransitionRegex = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There|Get|Tell|Start)\b)`)
 )
 
 // WhisperJSONOutput represents the output structure produced by whisper-cli -ojf
@@ -391,7 +396,10 @@ func CleanTranscriptText(text string) string {
 			return "hesitating"
 		case strings.Contains(lower, "can"):
 			return "Canadian"
-		case strings.Contains(lower, "ce"):
+		case strings.Contains(lower, "c") && strings.Contains(lower, "e") && strings.Contains(lower, "f") && strings.Contains(lower, "r"):
+			if strings.Contains(lower, "level") {
+				return "CEFR level"
+			}
 			return "CEFR"
 		case strings.Contains(lower, "circle"):
 			return "Circle K and"
@@ -400,7 +408,12 @@ func CleanTranscriptText(text string) string {
 		}
 	})
 
-	// 5b. Clean dangling possessives/articles with accidental periods (e.g. "my. Hair" -> "my hair", "do you have a. Lot" -> "do you have a lot")
+	// 5a2. Fix spaced acronyms (e.g. "U S A" -> "USA", "P D F" -> "PDF") and split acronyms stuck to nouns (e.g. "CEFRlevel" -> "CEFR level")
+	text = spacedAcronym4.ReplaceAllString(text, "$1$2$3$4")
+	text = spacedAcronym3.ReplaceAllString(text, "$1$2$3")
+	text = acronymNounSplit.ReplaceAllString(text, "$1 $2")
+
+	// 5b. Clean dangling possessives/articles with accidental periods (e.g. "my. Hair" -> "my hair", "with the." -> "with the...")
 	text = danglingWordInline.ReplaceAllStringFunc(text, func(m string) string {
 		parts := danglingWordInline.FindStringSubmatch(m)
 		if len(parts) == 3 {
@@ -408,6 +421,7 @@ func CleanTranscriptText(text string) string {
 		}
 		return m
 	})
+	text = danglingWordTrailing.ReplaceAllString(text, "$1...")
 
 	// 5c. Fix detached consonant clusters and single consonant prefixes (e.g. "wr inkly", "kn uckles", "cl ippers", "tr inkets", "m owing", "r ake", "ch ores")
 	for i := 0; i < 2; i++ {
@@ -432,10 +446,11 @@ func CleanTranscriptText(text string) string {
 	text = commaLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
 	text = periodLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
 
-	// 7. Fix currency formatting and spacing (e.g. "was$10, 000" -> "was $10,000", "$ 50" -> "$50", "$2.$2?" -> "$2. $2?")
+	// 7. Fix currency formatting and spacing (e.g. "was$10, 000" -> "was $10,000", "$ 50" -> "$50", "Yeah,$15" -> "Yeah, $15", "$2.$2?" -> "$2. $2?")
 	text = currencyPrefixRegex.ReplaceAllString(text, "$1 $2")
 	text = currencySpacingRegex.ReplaceAllString(text, "$1$2")
 	text = periodCurrencyRegex.ReplaceAllString(text, "$1 $2")
+	text = commaCurrencyRegex.ReplaceAllString(text, "$1 $2")
 	for i := 0; i < 3; i++ {
 		text = numberCommaSpacing.ReplaceAllString(text, "$1,$2")
 	}

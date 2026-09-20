@@ -58,10 +58,15 @@ export function cleanTranscriptTypography(text: string): string {
     // 5a. Fix special known word fragment splits first (e.g. CE FR -> CEFR, Circle Kand -> Circle K and)
     .replace(/\bhes\s+itating\b/gi, 'hesitating')
     .replace(/\bcan\s+adian\b/gi, 'Canadian')
-    .replace(/\bCE\s+FR\b/gi, 'CEFR')
+    .replace(/\bc\s*e\s*f\s*r\s*(level)?\b/gi, (_, p1) => p1 ? 'CEFR level' : 'CEFR')
     .replace(/\bCircle\s+Kand\b/gi, 'Circle K and')
-    // 5b. Clean dangling possessives/articles with accidental periods (e.g. "my. Hair" -> "my hair", "do you have a. Lot" -> "do you have a lot")
+    // 5a2. Fix spaced acronyms (e.g. "U S A" -> "USA", "P D F" -> "PDF") and split acronyms stuck to nouns (e.g. "CEFRlevel" -> "CEFR level")
+    .replace(/\b([A-Z])\s+([A-Z])\s+([A-Z])\s+([A-Z])\b/g, '$1$2$3$4')
+    .replace(/\b([A-Z])\s+([A-Z])\s+([A-Z])\b/g, '$1$2$3')
+    .replace(/\b([A-Z]{2,})([a-z]{2,})\b/g, '$1 $2')
+    // 5b. Clean dangling possessives/articles with accidental periods (e.g. "my. Hair" -> "my hair", "with the." -> "with the...")
     .replace(/\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.\s+([a-zA-Z])/gi, (_, p1, p2) => `${p1} ${p2.toLowerCase()}`)
+    .replace(/\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.$/gi, '$1...')
     // 5c. Fix detached consonant clusters and single consonant prefixes (e.g. "wr inkly", "kn uckles", "cl ippers", "tr inkets", "m owing", "r ake", "ch ores")
     .replace(/(^|\s)(wr|kn|cl|cr|tr|bl|br|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|wh|ch|Wr|Kn|Cl|Cr|Tr|Bl|Br|Fl|Fr|Gl|Gr|Pl|Pr|Sc|Sk|Sl|Sm|Sn|Sp|Sw|Wh|Ch|[b-hj-z])\s+([a-z]{2,})\b/g, (m, p1, p2, p3) => {
       if (COMMON_STANDALONE_WORDS.has(p3.toLowerCase())) return m;
@@ -77,9 +82,10 @@ export function cleanTranscriptTypography(text: string): string {
     .replace(/([;?!])([A-Za-z0-9])/g, '$1 $2')
     .replace(/([:,])([A-Za-z])/g, '$1 $2')
     .replace(/(\.)([A-Za-z])/g, '$1 $2')
-    // 7. Fix currency and numbers spacing (e.g. "3, 000" -> "3,000", "$10, 000" -> "$10,000", "$ 50" -> "$50", "$2.$2?" -> "$2. $2?")
+    // 7. Fix currency and numbers spacing (e.g. "3, 000" -> "3,000", "$10, 000" -> "$10,000", "$ 50" -> "$50", "Yeah,$15" -> "Yeah, $15", "$2.$2?" -> "$2. $2?")
     .replace(/([a-zA-Z0-9])([$€£¥₫])/g, '$1 $2')
     .replace(/([$€£¥₫])\s+(\d)/g, '$1$2')
+    .replace(/([,;:])\s*([$€£¥₫])/g, '$1 $2')
     .replace(/\b(\d{1,3}),\s+(\d{3})\b/g, '$1,$2')
     .replace(/\b(\d{1,3}),\s+(\d{3})\b/g, '$1,$2')
     .replace(/\b(\d+)\.\s+(\d+[a-zA-Z]*)\b/g, '$1.$2')
@@ -90,11 +96,11 @@ export function cleanTranscriptTypography(text: string): string {
     .replace(/\bi\b/g, 'I')
     .replace(/\bi(['’](?:m|ve|ll|d))\b/gi, (_, p1) => 'I' + p1.toLowerCase())
     // 10. Capitalize common proper nouns
-    .replace(/\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|obama)\b/gi, (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase())
+    .replace(/\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama)\b/gi, (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase())
     // 11. Capitalize letter following sentence punctuation (. ? !)
     .replace(/([.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase())
     // 12. Split run-on clauses before strong sentence transitions
-    .replace(/\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)/g, '$1. $2')
+    .replace(/\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There|Get|Tell|Start)\b)/g, '$1. $2')
     // 13. Collapse multiple spaces
     .replace(/\s{2,}/g, ' ')
     .trim();
