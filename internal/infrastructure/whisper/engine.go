@@ -202,8 +202,12 @@ func (e *Engine) Transcribe(
 	// -pp: print progress
 	// -p: parallel processors (splits audio into parallel chunks)
 	// -t: threads per processor
-	// -bs 1 -bo 1: greedy decoding (3x-5x faster on CPU than beam search, prevents freezing)
-	// -fa: flash attention
+	// -bs 1 -bo 1: greedy decoding (faster, prevents freezing)
+	// -mc 0: zero context carryover across 30s chunks - prevents prompt bleed & infinite repetition loops during pauses/silence!
+	// -sns: suppress non-speech tokens
+	// -nth 0.6: no-speech probability threshold to skip pure silence chunks
+	// --suppress-regex: suppress common YouTube/outro training set hallucinations during pauses
+	// -fa: flash attention for GPU speedup
 	args := []string{
 		"-m", modelPath,
 		"-f", wavPath,
@@ -215,6 +219,10 @@ func (e *Engine) Transcribe(
 		"-t", strconv.Itoa(threads),
 		"-bs", "1",
 		"-bo", "1",
+		"-mc", "0",
+		"-sns",
+		"-nth", "0.6",
+		"--suppress-regex", `(Thank you for watching|Thanks for watching|Please leave a comment|Please subscribe|Like and subscribe|Subtitles by|Translated by)`,
 		"-fa",
 	}
 
@@ -306,27 +314,34 @@ func (e *Engine) Transcribe(
 			if match := sentenceRegex.FindStringSubmatch(line); len(match) > 1 {
 				rawText := strings.TrimSpace(match[1])
 				if rawText != "" && !strings.HasPrefix(rawText, "[_") {
-					sentenceCount++
-					latestSentence = rawText
-					item := fmt.Sprintf("%d. %s", sentenceCount, rawText)
-					recentSentences = append(recentSentences, item)
-					if len(recentSentences) > 8 {
-						recentSentences = recentSentences[len(recentSentences)-8:]
-					}
+					// Discard hallucinations and consecutive duplicate sentences from the live stream
+					if !IsHallucination(rawText) {
+						normRaw := NormalizeSentenceText(rawText)
+						normLatest := NormalizeSentenceText(latestSentence)
+						if normRaw != "" && normRaw != normLatest {
+							sentenceCount++
+							latestSentence = rawText
+							item := fmt.Sprintf("%d. %s", sentenceCount, rawText)
+							recentSentences = append(recentSentences, item)
+							if len(recentSentences) > 8 {
+								recentSentences = recentSentences[len(recentSentences)-8:]
+							}
 
-					if onProgress != nil {
-						scaledPercent := 10 + int(float64(currentRawProg)*0.82)
-						if scaledPercent < 12 {
-							scaledPercent = 12
+							if onProgress != nil {
+								scaledPercent := 10 + int(float64(currentRawProg)*0.82)
+								if scaledPercent < 12 {
+									scaledPercent = 12
+								}
+								status := fmt.Sprintf("Đang nhận diện: Câu %d", sentenceCount)
+								onProgress(study.TranscribeProgress{
+									Percentage:      scaledPercent,
+									Status:          status,
+									LatestSentence:  latestSentence,
+									SentenceCount:   sentenceCount,
+									RecentSentences: recentSentences,
+								})
+							}
 						}
-						status := fmt.Sprintf("Đang nhận diện: Câu %d", sentenceCount)
-						onProgress(study.TranscribeProgress{
-							Percentage:      scaledPercent,
-							Status:          status,
-							LatestSentence:  latestSentence,
-							SentenceCount:   sentenceCount,
-							RecentSentences: recentSentences,
-						})
 					}
 				}
 			}

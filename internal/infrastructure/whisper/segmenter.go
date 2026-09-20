@@ -172,13 +172,44 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 		finalizeSentence()
 	}
 
-	// Post-processing: re-index IDs cleanly
-	for i := range sentences {
-		sentences[i].Index = i + 1
-		sentences[i].ID = generateSentenceID(i + 1)
+	// Post-processing: deduplicate adjacent sentences and filter out hallucinations
+	cleaned := make([]study.Sentence, 0, len(sentences))
+	for _, s := range sentences {
+		s.Transcript = strings.TrimSpace(s.Transcript)
+		if s.Transcript == "" || s.EndMs <= s.StartMs {
+			continue
+		}
+
+		if IsHallucination(s.Transcript) {
+			continue
+		}
+
+		if len(cleaned) > 0 {
+			prev := cleaned[len(cleaned)-1]
+			normCurr := NormalizeSentenceText(s.Transcript)
+			normPrev := NormalizeSentenceText(prev.Transcript)
+
+			// 1. Identical consecutive sentence text -> drop duplicate
+			if normCurr != "" && normCurr == normPrev {
+				continue
+			}
+
+			// 2. Fragment swallowed by previous sentence within 1.5s
+			if strings.Contains(normPrev, normCurr) && s.EndMs <= prev.EndMs+1500 && len(strings.Fields(normCurr)) <= 3 {
+				continue
+			}
+		}
+
+		cleaned = append(cleaned, s)
 	}
 
-	return sentences
+	// Re-index IDs cleanly
+	for i := range cleaned {
+		cleaned[i].Index = i + 1
+		cleaned[i].ID = generateSentenceID(i + 1)
+	}
+
+	return cleaned
 }
 
 func isSentenceEnd(word string) bool {
@@ -217,4 +248,104 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+var knownHallucinations = []string{
+	"thank you for watching",
+	"thanks for watching",
+	"thank you very much for watching",
+	"please subscribe",
+	"like and subscribe",
+	"please like and subscribe",
+	"don't forget to subscribe",
+	"subscribe to my channel",
+	"please leave a comment",
+	"if you have any questions, please leave a comment",
+	"leave a comment",
+	"subtitles by",
+	"subtitles by the amara.org community",
+	"translated by",
+	"transcribed by",
+	"see you next time",
+	"see you in the next video",
+	"watch more videos",
+	"bye bye",
+	"bye-bye",
+}
+
+// NormalizeSentenceText removes punctuation and excess spacing for robust comparisons
+func NormalizeSentenceText(text string) string {
+	lower := strings.ToLower(text)
+	var b strings.Builder
+	for _, r := range lower {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else if r == ' ' {
+			b.WriteRune(' ')
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// IsHallucination identifies typical Whisper silence hallucination artifacts
+func IsHallucination(text string) bool {
+	norm := NormalizeSentenceText(text)
+	if norm == "" {
+		return true
+	}
+
+	// 1. Matches or contains known outro/silence hallucination phrases
+	for _, h := range knownHallucinations {
+		if strings.Contains(norm, NormalizeSentenceText(h)) {
+			words := strings.Fields(norm)
+			if len(words) <= 16 {
+				return true
+			}
+		}
+	}
+
+	// 2. Pure sound tags like [music], (music), [applause]
+	trimmed := strings.TrimSpace(text)
+	if (strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")) ||
+		(strings.HasPrefix(trimmed, "(") && strings.HasSuffix(trimmed, ")")) {
+		inner := strings.ToLower(trimmed[1 : len(trimmed)-1])
+		if strings.Contains(inner, "music") || strings.Contains(inner, "applause") ||
+			strings.Contains(inner, "laughter") || strings.Contains(inner, "cheering") ||
+			strings.Contains(inner, "silence") || strings.Contains(inner, "sigh") {
+			return true
+		}
+	}
+
+	// 3. Excessive repetition loop within a single sentence
+	words := strings.Fields(norm)
+	if len(words) >= 4 {
+		// Single word loop: e.g. "bye bye bye bye"
+		allSame := true
+		for i := 1; i < len(words); i++ {
+			if words[i] != words[0] {
+				allSame = false
+				break
+			}
+		}
+		if allSame {
+			return true
+		}
+
+		// 2-word phrase loop: e.g. "you know you know you know"
+		if len(words)%2 == 0 && len(words) >= 6 {
+			is2Loop := true
+			w0, w1 := words[0], words[1]
+			for i := 2; i < len(words); i += 2 {
+				if words[i] != w0 || words[i+1] != w1 {
+					is2Loop = false
+					break
+				}
+			}
+			if is2Loop {
+				return true
+			}
+		}
+	}
+
+	return false
 }

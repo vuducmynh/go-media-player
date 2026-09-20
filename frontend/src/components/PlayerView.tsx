@@ -95,6 +95,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState<boolean>(false);
   const qualityMenuRef = useRef<HTMLDivElement | null>(null);
+  const isUserCancellingRef = useRef<boolean>(false);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -214,6 +215,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
   const handleCancelLessonProcessing = async () => {
     if (!currentFile) return;
+    isUserCancellingRef.current = true;
     try {
       await WailsBridge.cancelLessonProcessing(currentFile.fingerprint);
     } catch (e) {
@@ -228,6 +230,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
   const handleStartTranscription = async (modelId: string) => {
     if (!currentFile) return;
+    isUserCancellingRef.current = false;
     const modelFriendlyNames: Record<string, string> = {
       'large-v3-turbo-q5_0': 'Whisper Large-v3 Turbo Q5 (Khuyên dùng • ~547MB)',
       'base': 'Whisper Base (Siêu nhẹ & Nhanh • ~142MB)',
@@ -258,6 +261,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       const msg = String(err?.message || err || '');
       // If user gracefully cancelled, do NOT show an alert dialog!
       if (
+        isUserCancellingRef.current ||
         msg.toLowerCase().includes('cancelled') ||
         msg.toLowerCase().includes('canceled') ||
         msg.toLowerCase().includes('context canceled')
