@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { RefreshCw, Sparkles, AudioWaveform, CheckCircle2, XCircle, Cpu, ArrowDown } from 'lucide-react';
+import { RefreshCw, Sparkles, AudioWaveform, CheckCircle2, XCircle, Cpu, ArrowDown, Clock, Hourglass, Zap } from 'lucide-react';
 
 interface ProcessingModalProps {
   isOpen: boolean;
@@ -8,8 +8,20 @@ interface ProcessingModalProps {
   sentenceCount?: number;
   recentSentences?: string[];
   activeModelName?: string;
+  audioDuration?: number;
   onCancel?: () => void;
 }
+
+const formatDuration = (totalSec: number) => {
+  if (isNaN(totalSec) || totalSec <= 0) return '00:00';
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = Math.floor(totalSec % 60);
+  if (h > 0) {
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
 
 export const ProcessingModal: React.FC<ProcessingModalProps> = ({
   isOpen,
@@ -18,10 +30,27 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
   sentenceCount = 0,
   recentSentences = [],
   activeModelName,
+  audioDuration = 0,
   onCancel,
 }) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
+  // Live timer: counts up elapsed seconds while modal is open
+  useEffect(() => {
+    if (!isOpen) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedSeconds(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isOpen]);
 
   // Auto-scroll only when user is already near the bottom
   useEffect(() => {
@@ -49,6 +78,25 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
   if (!isOpen) return null;
 
   const isHeavyModel = activeModelName?.toLowerCase().includes('1.1') || activeModelName?.toLowerCase().includes('large-v3 q5');
+  const isTurboModel = activeModelName?.toLowerCase().includes('turbo');
+
+  // Dynamic ETA calculation
+  let etaText = 'Đang tính...';
+  if (percentage >= 5 && elapsedSeconds >= 2) {
+    const estimatedTotal = elapsedSeconds / (percentage / 100);
+    const remaining = Math.max(0, Math.round(estimatedTotal - elapsedSeconds));
+    etaText = `~${formatDuration(remaining)}`;
+  } else if (percentage >= 95) {
+    etaText = 'Sắp xong...';
+  }
+
+  // Real-time speed factor multiplier (e.g. 12.5x real-time)
+  let speedText = '';
+  if (audioDuration && audioDuration > 0 && percentage > 0 && elapsedSeconds >= 2) {
+    const processedAudioSec = audioDuration * (percentage / 100);
+    const speed = processedAudioSec / Math.max(1, elapsedSeconds);
+    speedText = `${speed.toFixed(1)}x`;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
@@ -79,13 +127,25 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
           </div>
         )}
 
-        {/* Speed Advice for Heavy Model */}
+        {/* Speed Advice for Heavy Model or Turbo Model */}
         {isHeavyModel && (
-          <div className="w-full p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] text-left flex items-start gap-2">
-            <span className="text-amber-400 font-bold shrink-0">💡 Gợi ý:</span>
-            <span>
-              Bản mô hình lớn (~1.1GB) cần nhiều thời gian xử lý. Để nhận diện nhanh hơn, bạn có thể chọn bản <strong>Whisper Turbo Q5</strong> (~547MB).
-            </span>
+          <div className="w-full p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] text-left flex items-start gap-2.5">
+            <span className="text-amber-400 font-bold shrink-0 text-xs">💡 Lưu ý:</span>
+            <div className="space-y-1">
+              <p>
+                Bạn đang chọn <strong>Whisper Large-v3</strong> (32 tầng giải mã sâu). Mô hình chuẩn xác nhất nhưng cần thời gian tính toán tuần tự từng từ.
+              </p>
+              <p className="text-amber-300/80">
+                ⚡ <em>Mẹo tăng tốc:</em> Muốn nhận diện <strong>nhanh gấp 4 - 8 lần</strong> (chỉ mất ~20–30s) mà vẫn đạt độ chuẩn 99%, bạn có thể chọn bản <strong>Whisper Turbo Q5</strong>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isTurboModel && (
+          <div className="w-full p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] text-left flex items-center gap-2">
+            <Zap className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Đang dùng kiến trúc <strong>Whisper Turbo</strong> (4 tầng giải mã) – tốc độ nhanh gấp 4 đến 8 lần so với bản gốc.</span>
           </div>
         )}
 
@@ -103,6 +163,49 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
               className="h-full bg-fluent-accent transition-[width] duration-300 ease-out"
               style={{ width: `${Math.max(4, percentage)}%` }}
             />
+          </div>
+        </div>
+
+        {/* Real-time Performance & Timer Dashboard */}
+        <div className="grid grid-cols-3 gap-2 w-full">
+          {/* 1. Elapsed Time */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1 text-[11px] text-fluent-text-muted mb-0.5">
+              <Clock className="w-3.5 h-3.5 text-fluent-accent" />
+              <span>Đã chạy</span>
+            </div>
+            <span className="text-sm font-mono font-bold text-white tracking-wide">
+              {formatDuration(elapsedSeconds)}
+            </span>
+          </div>
+
+          {/* 2. Remaining ETA */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1 text-[11px] text-fluent-text-muted mb-0.5">
+              <Hourglass className="w-3.5 h-3.5 text-amber-400" />
+              <span>Còn khoảng</span>
+            </div>
+            <span className="text-sm font-mono font-bold text-amber-300 tracking-wide">
+              {etaText}
+            </span>
+          </div>
+
+          {/* 3. Speed Factor & Audio Length */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1 text-[11px] text-fluent-text-muted mb-0.5">
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Tốc độ AI</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-sm font-mono font-bold text-emerald-400">
+                {speedText || 'Đang đo...'}
+              </span>
+              {audioDuration > 0 && (
+                <span className="text-[10px] text-fluent-text-muted font-mono">
+                  ({formatDuration(audioDuration)})
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

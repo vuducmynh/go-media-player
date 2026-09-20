@@ -4,6 +4,28 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.8] - 21/09/2026
+
+# Đồng Hồ Đo Thời Gian & Tốc Độ AI Thực Tế (Timer, ETA & Speed Factor), Tự Động Dừng Media Khi Xử Lý & Tối Ưu Băng Thông GPU
+
+Bản cập nhật v1.3.8 nâng cấp mạnh mẽ trải nghiệm người dùng khi phân tích bài học AI Whisper: bổ sung cụm đồng hồ thời gian thực (thời gian đã chạy, ước tính thời gian còn lại ETA, hệ số tốc độ gấp N lần thời gian thực), tự động dừng hoàn toàn video/audio/YouTube đang phát khi bắt đầu phân tích để giải phóng 100% băng thông GPU/VRAM, và giải thích sâu sắc về cơ chế vận hành Autoregressive Memory-Bound của mô hình AI.
+
+### Cải tiến & Khắc phục lỗi (3)
+- **Tự động dừng phát Media khi bắt đầu phân tích AI**:
+  - Khi người dùng bấm "Luyện sâu", "Tạo lại bài học" hoặc mở cửa sổ chọn mô hình, hệ thống lập tức ra lệnh tạm dừng (`pause`) tất cả nguồn phát (YouTube, video/audio tệp tin, audio ngoại tuyến).
+  - Tránh tình trạng video tiếp tục phát ầm ĩ dưới nền khiến người dùng bị kẹt không thể dừng lại.
+  - Giải phóng bộ giải mã phần cứng GPU Video Decoder và băng thông bộ nhớ VRAM, giúp AI Whisper đạt tốc độ tối đa không bị tranh chấp.
+- **Bổ sung Dashboard Đo Lường Thời Gian Thực (Timer, ETA, Speed Factor & Audio Length)**:
+  - Hiển thị 3 thẻ thông số trực quan ngay trong hộp thoại phân tích:
+    - ⏱️ **Đã chạy (Elapsed Time)**: Đếm chính xác số giây, phút đã xử lý.
+    - ⏳ **Còn khoảng (ETA Remaining)**: Dự toán tự động thời gian còn lại dựa trên độ dốc tiến độ thực tế (`~00:45`, `~01:20`).
+    - ⚡ **Tốc độ AI (Speed Factor)**: Đo lường tốc độ thực tế so với thời lượng audio gốc (ví dụ: `12.5x (gấp 12.5 lần thời gian thực)` kèm thời lượng gốc `22:34`).
+- **Nâng cấp Bảng hướng dẫn & So sánh Mô hình Whisper**:
+  - Giải thích rõ ràng sự khác biệt giữa **Large-v3** (32 tầng giải mã tuần tự, chuẩn xác nhất cho accent khó) và **Large-v3-Turbo** (4 tầng giải mã, nhanh gấp 4 - 8 lần).
+  - Giúp người dùng hiểu rõ bản chất GPU bận ~40% là do giới hạn băng thông bộ nhớ (Memory-Bandwidth Bound) của thuật toán Autoregressive sinh từng từ, không phải do hệ thống bỏ phí tài nguyên.
+
+---
+
 ## [v1.3.7] - 21/09/2026
 
 # Tối ưu Chế độ Audio Ngoại Tuyến (Ẩn Video & Đồng Bộ Điều Khiển), Chuẩn Hóa Số Thập Phân & Ngắt Câu Độc Thoại Thông Minh

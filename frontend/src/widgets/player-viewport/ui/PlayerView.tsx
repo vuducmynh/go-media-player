@@ -372,9 +372,26 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     }
   };
 
+  const pauseAllPlayback = () => {
+    if (isYouTube) {
+      ytPlayer.pause();
+    } else if (mediaRef.current) {
+      mediaRef.current.pause();
+      setIsPlaying(false);
+    }
+    if (offlineAudioRef.current) {
+      offlineAudioRef.current.pause();
+      setOfflineAudioPlaying(false);
+    }
+  };
+
   const handleStartTranscription = async (modelId: string) => {
     if (!currentFile) return;
     isUserCancellingRef.current = false;
+
+    // Pause all playback immediately so video/audio doesn't play in the background during AI analysis
+    pauseAllPlayback();
+
     const modelFriendlyNames: Record<string, string> = {
       'large-v3-turbo-q5_0': 'Whisper Large-v3 Turbo Q5 (Khuyên dùng • ~547MB)',
       'base': 'Whisper Base (Siêu nhẹ & Nhanh • ~142MB)',
@@ -1260,6 +1277,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
               {currentLesson && currentLesson.sentences && currentLesson.sentences.length > 0 ? (
                 <button
                   onClick={() => {
+                    pauseAllPlayback();
                     setIsRemakeMode(true);
                     setIsModelManagerOpen(true);
                   }}
@@ -1271,6 +1289,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
               ) : (
                 <button
                   onClick={() => {
+                    pauseAllPlayback();
                     setIsRemakeMode(false);
                     setIsModelManagerOpen(true);
                   }}
@@ -1360,6 +1379,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         sentenceCount={processingSentenceCount}
         recentSentences={processingRecentSentences}
         activeModelName={activeModelName}
+        audioDuration={activeDuration || currentFile?.duration || 0}
         onCancel={handleCancelLessonProcessing}
       />
 
