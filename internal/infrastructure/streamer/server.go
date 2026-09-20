@@ -2,12 +2,14 @@ package streamer
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"mime"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -71,6 +73,38 @@ func NewStreamServer() (*StreamServer, error) {
 	return ss, nil
 }
 
+func getRemuxedAudioPath(inputPath string) string {
+	ext := strings.ToLower(filepath.Ext(inputPath))
+	if ext != ".mp3" {
+		return inputPath
+	}
+
+	info, err := os.Stat(inputPath)
+	if err != nil {
+		return inputPath
+	}
+
+	hashInput := fmt.Sprintf("%s_%d_%d", inputPath, info.Size(), info.ModTime().UnixNano())
+	h := sha256.Sum256([]byte(hashInput))
+	cacheDir := filepath.Join(os.TempDir(), "gap_stream_cache")
+	_ = os.MkdirAll(cacheDir, 0755)
+	remuxPath := filepath.Join(cacheDir, fmt.Sprintf("fast_%x.mp4", h[:16]))
+
+	if rInfo, err := os.Stat(remuxPath); err == nil && rInfo.Size() > 0 {
+		return remuxPath
+	}
+
+	// Remux lossless: copies MP3 audio frames into MP4 container with faststart ISO seek index
+	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath, "-c:a", "copy", "-movflags", "+faststart", remuxPath)
+	setHideWindow(cmd)
+	if err := cmd.Run(); err != nil {
+		_ = os.Remove(remuxPath)
+		return inputPath
+	}
+
+	return remuxPath
+}
+
 func (ss *StreamServer) handleStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
@@ -89,22 +123,29 @@ func (ss *StreamServer) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filePath = filepath.Clean(filePath)
-	fileInfo, err := os.Stat(filePath)
+	actualPath := getRemuxedAudioPath(filePath)
+	fileInfo, err := os.Stat(actualPath)
 	if err != nil || fileInfo.IsDir() {
-		http.Error(w, "file not found", http.StatusNotFound)
-		return
+		actualPath = filePath
+		fileInfo, err = os.Stat(filePath)
+		if err != nil || fileInfo.IsDir() {
+			http.Error(w, "file not found", http.StatusNotFound)
+			return
+		}
 	}
 
-	file, err := os.Open(filePath)
+	file, err := os.Open(actualPath)
 	if err != nil {
 		http.Error(w, "cannot open file", http.StatusForbidden)
 		return
 	}
 	defer file.Close()
 
-	ext := strings.ToLower(filepath.Ext(filePath))
+	ext := strings.ToLower(filepath.Ext(actualPath))
 	contentType := mime.TypeByExtension(ext)
-	if contentType == "" {
+	if ext == ".mp4" {
+		contentType = "audio/mp4"
+	} else if contentType == "" {
 		contentType = "application/octet-stream"
 	}
 	w.Header().Set("Content-Type", contentType)

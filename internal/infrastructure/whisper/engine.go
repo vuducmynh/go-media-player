@@ -222,7 +222,7 @@ func (e *Engine) Transcribe(
 		"-mc", "0",
 		"-sns",
 		"-nth", "0.6",
-		"--suppress-regex", `(Thank you for watching|Thanks for watching|Please leave a comment|Please subscribe|Like and subscribe|Subtitles by|Translated by)`,
+		"--suppress-regex", `(Thank you for watching|Thanks for watching|Please leave a comment|Please subscribe|Like and subscribe|Subtitles by|Translated by|Thank you\.?$)`,
 		"-fa",
 	}
 
@@ -323,8 +323,8 @@ func (e *Engine) Transcribe(
 							latestSentence = rawText
 							item := fmt.Sprintf("%d. %s", sentenceCount, rawText)
 							recentSentences = append(recentSentences, item)
-							if len(recentSentences) > 8 {
-								recentSentences = recentSentences[len(recentSentences)-8:]
+							if len(recentSentences) > 1000 {
+								recentSentences = recentSentences[len(recentSentences)-1000:]
 							}
 
 							if onProgress != nil {

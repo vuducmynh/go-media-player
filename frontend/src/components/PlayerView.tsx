@@ -460,7 +460,17 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     const media = mediaRef.current;
     if (!media) return;
 
-    const dur = media.duration;
+    let dur = media.duration;
+    if (currentLesson && currentLesson.durationMs > 0) {
+      const lessonDurSec = currentLesson.durationMs / 1000;
+      if (!dur || isNaN(dur) || !isFinite(dur) || Math.abs(dur - lessonDurSec) > 5) {
+        dur = lessonDurSec;
+      }
+    } else if (currentFile && currentFile.duration > 0) {
+      if (!dur || isNaN(dur) || !isFinite(dur) || Math.abs(dur - currentFile.duration) > 5) {
+        dur = currentFile.duration;
+      }
+    }
     setDuration(dur);
 
     // Auto resume if saved position exists

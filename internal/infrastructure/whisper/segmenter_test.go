@@ -102,6 +102,15 @@ func TestProcessSegmentsDeduplication(t *testing.T) {
 				{Text: " me?", Offsets: WhisperOffsets{From: 661500, To: 662000}},
 			},
 		},
+		// Trailing silence outro hallucination (lasting 20 seconds)
+		{
+			Text:    "Thank you.",
+			Offsets: WhisperOffsets{From: 1284940, To: 1305890},
+			Tokens: []WhisperToken{
+				{Text: "Thank", Offsets: WhisperOffsets{From: 1284940, To: 1297060}},
+				{Text: " you.", Offsets: WhisperOffsets{From: 1297060, To: 1305890}},
+			},
+		},
 	}
 
 	result := segmenter.ProcessSegments(raw)

@@ -184,9 +184,14 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 			continue
 		}
 
+		normCurr := NormalizeSentenceText(s.Transcript)
+		// 0. Filter out standalone outro words like "thank you" / "thanks" lasting > 2.5s during silence
+		if (normCurr == "thank you" || normCurr == "thanks" || normCurr == "thank you very much") && s.EndMs-s.StartMs > 2500 {
+			continue
+		}
+
 		if len(cleaned) > 0 {
 			prev := cleaned[len(cleaned)-1]
-			normCurr := NormalizeSentenceText(s.Transcript)
 			normPrev := NormalizeSentenceText(prev.Transcript)
 
 			// 1. Identical consecutive sentence text -> drop duplicate
