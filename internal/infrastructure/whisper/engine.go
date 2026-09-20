@@ -559,5 +559,6 @@ func (e *Engine) DownloadGPUAcceleration(onProgress func(study.ModelDownloadProg
 		})
 	}
 
+	InvalidateHardwareCache()
 	return nil
 }

@@ -76,6 +76,11 @@ func (a *App) startup(ctx context.Context) {
 
 	a.updaterSvc = application.NewUpdaterService()
 	a.updaterSvc.CleanupOldVersion()
+
+	// Pre-warm hardware detection in background so modal opens instantly
+	go func() {
+		whisper.DetectHardware("")
+	}()
 }
 
 // shutdown is called when the app terminates

@@ -6,10 +6,27 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 
 	"go-audio-play/internal/domain/study"
 	"go-audio-play/internal/infrastructure/storage"
 )
+
+var (
+	cachedHardware     *study.HardwareInfo
+	cachedHardwareLock sync.Mutex
+)
+
+// InvalidateHardwareCache forces a fresh detection on next call (e.g. after installing CUDA)
+func InvalidateHardwareCache() {
+	cachedHardwareLock.Lock()
+	defer cachedHardwareLock.Unlock()
+	cachedHardware = nil
+}
 
 type videoControllerInfo struct {
 	Name       string      `json:"Name"`
@@ -18,6 +35,30 @@ type videoControllerInfo struct {
 
 // DetectHardware interrogates the Windows system for video controllers, CPU topology, and storage
 func DetectHardware(binDir string) study.HardwareInfo {
+	cachedHardwareLock.Lock()
+	defer cachedHardwareLock.Unlock()
+
+	// If already cached, quickly check acceleration DLLs and return immediately (0ms)
+	if cachedHardware != nil {
+		res := *cachedHardware
+		res.AccelerationType = "cpu_avx"
+		res.AccelerationEnabled = false
+		if _, found := storage.FindExistingBinary("cublas64_12.dll"); found {
+			res.AccelerationType = "cuda"
+			res.AccelerationEnabled = true
+		} else if _, found := storage.FindExistingBinary("ggml-cuda.dll"); found {
+			res.AccelerationType = "cuda"
+			res.AccelerationEnabled = true
+		} else if _, found := storage.FindExistingBinary("libopenblas.dll"); found {
+			res.AccelerationType = "openblas"
+			res.AccelerationEnabled = true
+		} else if _, found := storage.FindExistingBinary("openblas.dll"); found {
+			res.AccelerationType = "openblas"
+			res.AccelerationEnabled = true
+		}
+		return res
+	}
+
 	info := study.HardwareInfo{
 		GPUVendor:           "unknown",
 		GPUName:             "Đồ họa tích hợp",
@@ -36,6 +77,7 @@ func DetectHardware(binDir string) study.HardwareInfo {
 	}
 
 	if runtime.GOOS != "windows" {
+		cachedHardware = &info
 		return info
 	}
 
@@ -118,20 +160,34 @@ func DetectHardware(binDir string) study.HardwareInfo {
 		}
 	}
 
-	// 3. Query CPU Name and Total Physical RAM
-	cpuCmd := exec.Command("powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_Processor).Name; (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory")
-	setHideWindow(cpuCmd)
-	if sysOut, err := cpuCmd.Output(); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(sysOut)), "\n")
-		if len(lines) >= 1 && strings.TrimSpace(lines[0]) != "" {
-			info.CPUName = strings.TrimSpace(lines[0])
+	// 3. Query CPU Name via Registry and Total RAM via Win32 API (ultra-fast <0.01ms, no PowerShell)
+	if k, err := registry.OpenKey(registry.LOCAL_MACHINE, `HARDWARE\DESCRIPTION\System\CentralProcessor\0`, registry.QUERY_VALUE); err == nil {
+		if name, _, err := k.GetStringValue("ProcessorNameString"); err == nil && name != "" {
+			info.CPUName = strings.TrimSpace(name)
 		}
-		if len(lines) >= 2 {
-			if totalBytes, err := strconv.ParseInt(strings.TrimSpace(lines[1]), 10, 64); err == nil && totalBytes > 0 {
-				info.RAMMB = int(totalBytes / (1024 * 1024))
-				info.RAMGB = int(totalBytes / (1024 * 1024 * 1024))
-			}
-		}
+		_ = k.Close()
+	}
+
+	type memorystatusex struct {
+		length               uint32
+		memoryLoad           uint32
+		totalPhys            uint64
+		availPhys            uint64
+		totalPageFile        uint64
+		availPageFile        uint64
+		totalVirtual         uint64
+		availVirtual         uint64
+		availExtendedVirtual uint64
+	}
+
+	kernel32 := windows.NewLazySystemDLL("kernel32.dll")
+	procGlobalMemoryStatusEx := kernel32.NewProc("GlobalMemoryStatusEx")
+	var mem memorystatusex
+	mem.length = uint32(unsafe.Sizeof(mem))
+	ret, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&mem)))
+	if ret != 0 && mem.totalPhys > 0 {
+		info.RAMMB = int(mem.totalPhys / (1024 * 1024))
+		info.RAMGB = int(mem.totalPhys / (1024 * 1024 * 1024))
 	}
 
 	// 4. Check installed acceleration libraries in any bin search dir
@@ -149,6 +205,7 @@ func DetectHardware(binDir string) study.HardwareInfo {
 		info.AccelerationEnabled = true
 	}
 
+	cachedHardware = &info
 	return info
 }
 
