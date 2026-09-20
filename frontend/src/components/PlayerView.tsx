@@ -14,13 +14,15 @@ import {
   Music,
   Headphones,
   CheckCircle2,
+  Youtube,
+  ExternalLink,
 } from 'lucide-react';
 import { MediaFile, AppSettings } from '../types';
 import { formatTime } from '../utils/formatters';
 import { AudioVisualizer } from './AudioVisualizer';
 import { ListeningControls } from './ListeningControls';
-import { WailsBridge } from '../services/wailsBridge';
 import { useHotkeys } from '../hooks/useHotkeys';
+import { useYouTubePlayer } from '../shared/hooks/useYouTubePlayer';
 
 interface PlayerViewProps {
   currentFile: MediaFile | null;
@@ -51,6 +53,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 }) => {
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const ytContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -67,7 +70,42 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const [hoverTime, setHoverTime] = useState<number>(0);
   const [hoverPositionRatio, setHoverPositionRatio] = useState<number>(0);
 
-  // When current file changes, load media and restore saved progress
+  const isYouTube = currentFile?.source === 'youtube' || Boolean(currentFile?.youtubeId);
+  const youtubeVideoId = isYouTube ? (currentFile?.youtubeId || currentFile?.id || null) : null;
+
+  // Handle YouTube ended event
+  const handleYouTubeEnded = () => {
+    if (currentFile && ytPlayer.duration > 0) {
+      onUpdateFileProgress(currentFile.fingerprint, ytPlayer.duration, ytPlayer.duration, loopA, loopB);
+    }
+    if (settings.autoPlayNext) {
+      onPlayNext();
+    }
+  };
+
+  // YouTube deep intervention player hook
+  const ytPlayer = useYouTubePlayer({
+    containerRef: ytContainerRef,
+    videoId: youtubeVideoId,
+    initialTime: settings.autoResume && currentFile ? currentFile.lastPosition : 0,
+    normalSpeed: normalSpeed,
+    slowSpeed: settings.slowSpeed || 0.5,
+    isSlowHeld: isSlowHeld,
+    loopA: loopA,
+    loopB: loopB,
+    isLoopActive: isLoopActive,
+    onEnded: handleYouTubeEnded,
+  });
+
+  // Active playback state dynamically resolving between YouTube and local media
+  const activeIsPlaying = isYouTube ? ytPlayer.isPlaying : isPlaying;
+  const activeCurrentTime = isYouTube ? ytPlayer.currentTime : currentTime;
+  const activeDuration = isYouTube ? ytPlayer.duration : duration;
+  const activePlaybackRate = isYouTube ? ytPlayer.playbackRate : playbackRate;
+  const activeVolume = isYouTube ? ytPlayer.volume : volume;
+  const activeIsMuted = isYouTube ? ytPlayer.isMuted : isMuted;
+
+  // When current file changes, restore saved state and A-B loop points
   useEffect(() => {
     if (!currentFile) {
       setIsPlaying(false);
@@ -79,21 +117,22 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       return;
     }
 
-    // Restore saved A-B loop points if available
     setLoopA(currentFile.loopA || 0);
     setLoopB(currentFile.loopB || 0);
     setIsLoopActive(Boolean(currentFile.loopA && currentFile.loopB && currentFile.loopB > currentFile.loopA));
 
-    // When media element is ready, resume position
-    const media = mediaRef.current;
-    if (media) {
-      media.playbackRate = normalSpeed;
-      media.volume = volume;
+    if (!isYouTube) {
+      const media = mediaRef.current;
+      if (media) {
+        media.playbackRate = normalSpeed;
+        media.volume = volume;
+      }
     }
-  }, [currentFile?.fingerprint]);
+  }, [currentFile?.fingerprint, isYouTube]);
 
-  // Handle Hold-to-slow effect
+  // Handle Hold-to-slow effect for local media (YouTube handled internally in useYouTubePlayer)
   useEffect(() => {
+    if (isYouTube) return;
     const media = mediaRef.current;
     if (!media) return;
 
@@ -104,11 +143,11 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       media.playbackRate = normalSpeed;
       setPlaybackRate(normalSpeed);
     }
-  }, [isSlowHeld, normalSpeed, settings.slowSpeed]);
+  }, [isSlowHeld, normalSpeed, settings.slowSpeed, isYouTube]);
 
-  // Periodic progress saving (every 2 seconds)
+  // Periodic progress saving for local media (every 2 seconds)
   useEffect(() => {
-    if (!currentFile || !isPlaying) return;
+    if (!currentFile || isYouTube || !isPlaying) return;
 
     const interval = setInterval(() => {
       const media = mediaRef.current;
@@ -124,9 +163,28 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [currentFile, isPlaying, loopA, loopB, onUpdateFileProgress]);
+  }, [currentFile, isYouTube, isPlaying, loopA, loopB, onUpdateFileProgress]);
 
-  // Media Event Handlers
+  // Periodic progress saving for YouTube video (every 2 seconds)
+  useEffect(() => {
+    if (!currentFile || !isYouTube || !ytPlayer.isPlaying) return;
+
+    const interval = setInterval(() => {
+      if (ytPlayer.currentTime > 0 && ytPlayer.duration > 0) {
+        onUpdateFileProgress(
+          currentFile.fingerprint,
+          ytPlayer.currentTime,
+          ytPlayer.duration,
+          loopA,
+          loopB
+        );
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [currentFile, isYouTube, ytPlayer.isPlaying, ytPlayer.currentTime, ytPlayer.duration, loopA, loopB, onUpdateFileProgress]);
+
+  // Local Media Event Handlers
   const handleLoadedMetadata = () => {
     const media = mediaRef.current;
     if (!media) return;
@@ -153,7 +211,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     const cur = media.currentTime;
     setCurrentTime(cur);
 
-    // A-B Loop verification
+    // A-B Loop verification for local media
     if (isLoopActive && loopB > loopA && loopA >= 0) {
       if (cur >= loopB) {
         media.currentTime = loopA;
@@ -171,21 +229,36 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     }
   };
 
-  const togglePlay = () => {
+  // Unified Playback Controls
+  const handleTogglePlay = () => {
+    if (!currentFile) return;
+
+    if (isYouTube) {
+      ytPlayer.togglePlay();
+      if (ytPlayer.isPlaying) {
+        onUpdateFileProgress(currentFile.fingerprint, ytPlayer.currentTime, ytPlayer.duration, loopA, loopB);
+      }
+      return;
+    }
+
     const media = mediaRef.current;
-    if (!media || !currentFile) return;
+    if (!media) return;
 
     if (media.paused) {
       media.play().then(() => setIsPlaying(true)).catch(() => {});
     } else {
       media.pause();
       setIsPlaying(false);
-      // Save position on pause
       onUpdateFileProgress(currentFile.fingerprint, media.currentTime, media.duration, loopA, loopB);
     }
   };
 
-  const seekTo = (seconds: number) => {
+  const handleSeekTo = (seconds: number) => {
+    if (isYouTube) {
+      ytPlayer.seekTo(seconds);
+      return;
+    }
+
     const media = mediaRef.current;
     if (!media || isNaN(seconds)) return;
     const maxDur = media.duration && !isNaN(media.duration) ? media.duration : duration || 0;
@@ -194,11 +267,16 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     setCurrentTime(clamped);
   };
 
-  const seekDelta = (delta: number) => {
+  const handleSeekDelta = (delta: number) => {
+    if (isYouTube) {
+      ytPlayer.seekDelta(delta);
+      return;
+    }
+
     const media = mediaRef.current;
     if (!media) return;
     const cur = !isNaN(media.currentTime) ? media.currentTime : currentTime;
-    seekTo(cur + delta);
+    handleSeekTo(cur + delta);
   };
 
   const handleSpeedChange = (newSpeed: number) => {
@@ -206,7 +284,9 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     setNormalSpeed(clamped);
     if (!isSlowHeld) {
       setPlaybackRate(clamped);
-      if (mediaRef.current) {
+      if (isYouTube) {
+        ytPlayer.setSpeed(clamped);
+      } else if (mediaRef.current) {
         mediaRef.current.playbackRate = clamped;
       }
     }
@@ -216,12 +296,19 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     const clamped = Math.max(0, Math.min(newVol, 1));
     setVolume(clamped);
     setIsMuted(clamped === 0);
-    if (mediaRef.current) {
+    if (isYouTube) {
+      ytPlayer.setVolume(clamped);
+    } else if (mediaRef.current) {
       mediaRef.current.volume = clamped;
     }
   };
 
-  const toggleMute = () => {
+  const handleToggleMute = () => {
+    if (isYouTube) {
+      ytPlayer.toggleMute();
+      return;
+    }
+
     const media = mediaRef.current;
     if (!media) return;
     if (isMuted) {
@@ -245,7 +332,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
   // Loop Controls
   const setLoopPointA = () => {
-    const cur = currentTime;
+    const cur = activeCurrentTime;
     setLoopA(cur);
     if (loopB > 0 && loopB > cur) {
       setIsLoopActive(true);
@@ -253,7 +340,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   };
 
   const setLoopPointB = () => {
-    const cur = currentTime;
+    const cur = activeCurrentTime;
     if (cur > loopA) {
       setLoopB(cur);
       setIsLoopActive(true);
@@ -277,16 +364,16 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   // Hook up full keyboard shortcuts directly to player
   useHotkeys(
     {
-      togglePlay,
-      seekDelta,
+      togglePlay: handleTogglePlay,
+      seekDelta: handleSeekDelta,
       adjustSpeed: (delta) => handleSpeedChange(normalSpeed + delta),
       setSlowSpeedActive,
       setLoopA: setLoopPointA,
       setLoopB: setLoopPointB,
       toggleLoop,
       clearLoop,
-      toggleMute,
-      adjustVolume: (delta) => handleVolumeChange(volume + delta),
+      toggleMute: handleToggleMute,
+      adjustVolume: (delta) => handleVolumeChange(activeVolume + delta),
       toggleFullscreen,
     },
     settings,
@@ -298,14 +385,14 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
     setHoverPositionRatio(ratio);
-    setHoverTime(ratio * duration);
+    setHoverTime(ratio * activeDuration);
     setIsHoveringTimeline(true);
   };
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
-    seekTo(ratio * duration);
+    handleSeekTo(ratio * activeDuration);
   };
 
   if (!currentFile) {
@@ -316,15 +403,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">Chưa chọn nội dung phát</h2>
         <p className="text-sm text-fluent-text-secondary max-w-md mb-6">
-          Chọn một file Audio hoặc Video từ danh sách bên trái để bắt đầu nghe & luyện phát âm với các tính năng Hold-to-slow và A-B loop.
+          Chọn một file Audio, Video hoặc nhúng video YouTube để bắt đầu nghe & luyện phát âm với các tính năng Hold-to-slow và A-B loop.
         </p>
       </div>
     );
   }
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const loopAPercent = duration > 0 ? (loopA / duration) * 100 : 0;
-  const loopBPercent = duration > 0 ? (loopB / duration) * 100 : 0;
+  const progressPercent = activeDuration > 0 ? (activeCurrentTime / activeDuration) * 100 : 0;
+  const loopAPercent = activeDuration > 0 ? (loopA / activeDuration) * 100 : 0;
+  const loopBPercent = activeDuration > 0 ? (loopB / activeDuration) * 100 : 0;
 
   return (
     <div
@@ -333,55 +420,64 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     >
       {/* Video Viewport / Audio Visualizer Area */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-        {currentFile.type === 'video' ? (
-          <video
-            ref={mediaRef as React.RefObject<HTMLVideoElement>}
-            src={currentFile.streamUrl}
-            className="w-full h-full object-contain cursor-pointer"
-            onClick={togglePlay}
-            onDoubleClick={toggleFullscreen}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onEnded={handleEnded}
-            playsInline
-          />
-        ) : (
-          <>
-            <audio
-              ref={mediaRef as React.RefObject<HTMLAudioElement>}
+        {/* YouTube Viewport Container */}
+        <div
+          ref={ytContainerRef}
+          className={`w-full h-full ${isYouTube ? 'flex items-center justify-center' : 'hidden'}`}
+        />
+
+        {/* Local Video or Audio */}
+        {!isYouTube && (
+          currentFile.type === 'video' ? (
+            <video
+              ref={mediaRef as React.RefObject<HTMLVideoElement>}
               src={currentFile.streamUrl}
+              className="w-full h-full object-contain cursor-pointer"
+              onClick={handleTogglePlay}
+              onDoubleClick={toggleFullscreen}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={handleEnded}
+              playsInline
             />
-            <AudioVisualizer
-              currentFile={currentFile}
-              isPlaying={isPlaying}
-              audioRef={mediaRef as React.RefObject<HTMLAudioElement>}
-            />
-          </>
+          ) : (
+            <>
+              <audio
+                ref={mediaRef as React.RefObject<HTMLAudioElement>}
+                src={currentFile.streamUrl}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={handleEnded}
+              />
+              <AudioVisualizer
+                currentFile={currentFile}
+                isPlaying={isPlaying}
+                audioRef={mediaRef as React.RefObject<HTMLAudioElement>}
+              />
+            </>
+          )
         )}
       </div>
 
       {/* Listening Controls (Hold-to-Slow, A-B Repeat Loop, Jump Deltas) */}
       <ListeningControls
         jumpSeconds={settings.jumpSeconds || 5}
-        playbackRate={playbackRate}
+        playbackRate={activePlaybackRate}
         isSlowHeld={isSlowHeld}
         slowSpeed={settings.slowSpeed || 0.5}
         holdSlowKey={settings.holdSlowKey || 'KeyS'}
         loopA={loopA}
         loopB={loopB}
         isLoopActive={isLoopActive}
-        currentTime={currentTime}
-        duration={duration}
-        onSeekDelta={seekDelta}
+        currentTime={activeCurrentTime}
+        duration={activeDuration}
+        onSeekDelta={handleSeekDelta}
         onSpeedChange={handleSpeedChange}
         onSetLoopA={setLoopPointA}
         onSetLoopB={setLoopPointB}
         onToggleLoop={toggleLoop}
         onClearLoop={clearLoop}
-        onSeekTo={seekTo}
+        onSeekTo={handleSeekTo}
       />
 
       {/* Main Bottom Playback Control Bar */}
@@ -398,27 +494,29 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
           <div className="w-full h-1.5 bg-white/10 group-hover:h-2 rounded-full overflow-hidden transition-all relative">
             {/* Progress Fill */}
             <div
-              className="h-full bg-fluent-accent rounded-full transition-[width] duration-75 relative"
+              className={`h-full rounded-full transition-[width] duration-75 relative ${
+                isYouTube ? 'bg-red-500' : 'bg-fluent-accent'
+              }`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
 
           {/* Loop A & B Markers on Timeline */}
-          {loopA > 0 && duration > 0 && (
+          {loopA > 0 && activeDuration > 0 && (
             <div
               className="absolute top-0 bottom-0 w-1 bg-cyan-400 z-10 pointer-events-none rounded"
               style={{ left: `${loopAPercent}%` }}
               title={`Mốc A: ${formatTime(loopA)}`}
             />
           )}
-          {loopB > 0 && duration > 0 && (
+          {loopB > 0 && activeDuration > 0 && (
             <div
               className="absolute top-0 bottom-0 w-1 bg-purple-400 z-10 pointer-events-none rounded"
               style={{ left: `${loopBPercent}%` }}
               title={`Mốc B: ${formatTime(loopB)}`}
             />
           )}
-          {isLoopActive && loopB > loopA && duration > 0 && (
+          {isLoopActive && loopB > loopA && activeDuration > 0 && (
             <div
               className="absolute h-1.5 top-1/2 -translate-y-1/2 bg-purple-500/30 pointer-events-none rounded"
               style={{
@@ -430,7 +528,9 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
           {/* Scrubber Thumb */}
           <div
-            className="absolute w-3.5 h-3.5 bg-white rounded-full shadow-lg border-2 border-fluent-accent -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+            className={`absolute w-3.5 h-3.5 bg-white rounded-full shadow-lg border-2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none ${
+              isYouTube ? 'border-red-500' : 'border-fluent-accent'
+            }`}
             style={{ left: `${progressPercent}%` }}
           />
 
@@ -449,8 +549,10 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         <div className="flex items-center justify-between gap-4">
           {/* Left: Track Info & Path */}
           <div className="flex items-center gap-3 min-w-[200px] max-w-sm truncate">
-            <div className="p-2 rounded-xl bg-fluent-bg-card border border-white/5 flex items-center justify-center">
-              {currentFile.type === 'video' ? (
+            <div className="p-2 rounded-xl bg-fluent-bg-card border border-white/5 flex items-center justify-center shrink-0">
+              {isYouTube ? (
+                <Youtube className="w-5 h-5 text-red-500" />
+              ) : currentFile.type === 'video' ? (
                 <Film className="w-5 h-5 text-fluent-accent" />
               ) : (
                 <Music className="w-5 h-5 text-fluent-accent" />
@@ -468,7 +570,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                 )}
               </div>
               <p className="text-[11px] text-fluent-text-secondary truncate">
-                {currentFile.name}
+                {isYouTube ? (currentFile.relativeDir || 'YouTube') : currentFile.name}
               </p>
             </div>
           </div>
@@ -485,11 +587,15 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
             {/* Main Play/Pause Button */}
             <button
-              onClick={togglePlay}
-              title={isPlaying ? 'Tạm dừng (Phím Space)' : 'Phát (Phím Space)'}
-              className="w-12 h-12 rounded-full bg-fluent-accent hover:bg-fluent-accent-hover active:bg-fluent-accent-active text-black flex items-center justify-center shadow-accent-glow transition-all active:scale-95 hover:scale-105"
+              onClick={handleTogglePlay}
+              title={activeIsPlaying ? 'Tạm dừng (Phím Space)' : 'Phát (Phím Space)'}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 hover:scale-105 ${
+                isYouTube
+                  ? 'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white shadow-lg shadow-red-600/30'
+                  : 'bg-fluent-accent hover:bg-fluent-accent-hover active:bg-fluent-accent-active text-black shadow-accent-glow'
+              }`}
             >
-              {isPlaying ? (
+              {activeIsPlaying ? (
                 <Pause className="w-6 h-6 fill-current" />
               ) : (
                 <Play className="w-6 h-6 fill-current translate-x-0.5" />
@@ -506,9 +612,9 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
             {/* Time Stamp */}
             <div className="font-mono text-xs text-fluent-text-secondary font-medium ml-2">
-              <span className="text-white">{formatTime(currentTime)}</span>
+              <span className="text-white">{formatTime(activeCurrentTime)}</span>
               <span className="mx-1 text-fluent-text-muted">/</span>
-              <span>{formatTime(duration)}</span>
+              <span>{formatTime(activeDuration)}</span>
             </div>
           </div>
 
@@ -517,13 +623,13 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
             {/* Volume Control */}
             <div className="flex items-center gap-2 group">
               <button
-                onClick={toggleMute}
-                title={isMuted ? 'Bật âm thanh (Phím M)' : 'Tắt âm thanh (Phím M)'}
+                onClick={handleToggleMute}
+                title={activeIsMuted ? 'Bật âm thanh (Phím M)' : 'Tắt âm thanh (Phím M)'}
                 className="p-1.5 rounded-lg hover:bg-white/10 text-fluent-text-secondary hover:text-white transition-colors"
               >
-                {isMuted || volume === 0 ? (
+                {activeIsMuted || activeVolume === 0 ? (
                   <VolumeX className="w-4 h-4 text-red-400" />
-                ) : volume < 0.5 ? (
+                ) : activeVolume < 0.5 ? (
                   <Volume1 className="w-4 h-4" />
                 ) : (
                   <Volume2 className="w-4 h-4" />
@@ -534,24 +640,24 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                 min="0"
                 max="1"
                 step="0.01"
-                value={isMuted ? 0 : volume}
+                value={activeIsMuted ? 0 : activeVolume}
                 onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                 className="w-20 cursor-pointer"
-                title={`Âm lượng: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                title={`Âm lượng: ${Math.round((activeIsMuted ? 0 : activeVolume) * 100)}%`}
               />
             </div>
 
-            {/* Open Containing Folder */}
+            {/* Open Containing Folder or YouTube Link */}
             <button
               onClick={() => onOpenFileFolder(currentFile.path)}
-              title="Mở thư mục chứa file trong Explorer"
+              title={isYouTube ? 'Mở video trên trình duyệt' : 'Mở thư mục chứa file trong Explorer'}
               className="p-1.5 rounded-lg hover:bg-white/10 text-fluent-text-secondary hover:text-white transition-colors"
             >
-              <FolderOpen className="w-4 h-4" />
+              {isYouTube ? <ExternalLink className="w-4 h-4 text-red-400" /> : <FolderOpen className="w-4 h-4" />}
             </button>
 
-            {/* Fullscreen (for video) */}
-            {currentFile.type === 'video' && (
+            {/* Fullscreen (for video & YouTube) */}
+            {(currentFile.type === 'video' || isYouTube) && (
               <button
                 onClick={toggleFullscreen}
                 title="Toàn màn hình (Phím F hoặc nhấp đúp)"

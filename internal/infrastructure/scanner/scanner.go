@@ -8,9 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"go-audio-play/pkg/fingerprint"
-	"go-audio-play/pkg/models"
-	"go-audio-play/pkg/storage"
+	"go-audio-play/internal/domain/library"
+	"go-audio-play/internal/domain/media"
+	"go-audio-play/internal/infrastructure/hasher"
+	"go-audio-play/internal/infrastructure/storage"
 )
 
 var AudioExtensions = map[string]bool{
@@ -37,13 +38,13 @@ var VideoExtensions = map[string]bool{
 	".ts":   true,
 }
 
-func IsSupportedMedia(ext string) (models.MediaType, bool) {
+func IsSupportedMedia(ext string) (media.MediaType, bool) {
 	lowerExt := strings.ToLower(ext)
 	if AudioExtensions[lowerExt] {
-		return models.MediaTypeAudio, true
+		return media.MediaTypeAudio, true
 	}
 	if VideoExtensions[lowerExt] {
-		return models.MediaTypeVideo, true
+		return media.MediaTypeVideo, true
 	}
 	return "", false
 }
@@ -60,19 +61,19 @@ func NewScanner(store *storage.Store) *Scanner {
 }
 
 // ScanFolders scans all registered root folders concurrently and attaches playback metadata
-func (s *Scanner) ScanFolders(folders []string, progressCb func(models.ScanProgress)) ([]models.MediaFile, error) {
+func (s *Scanner) ScanFolders(folders []string, progressCb func(library.ScanProgress)) ([]media.MediaItem, error) {
 	var discoveredFiles []struct {
 		Path       string
 		Name       string
 		Ext        string
-		Type       models.MediaType
+		Type       media.MediaType
 		Size       int64
 		ModTime    fs.FileInfo
 		FolderRoot string
 		RelDir     string
 	}
 
-	progress := models.ScanProgress{
+	progress := library.ScanProgress{
 		TotalFolders: len(folders),
 		ScannedFiles: 0,
 		FoundMedia:   0,
@@ -87,12 +88,11 @@ func (s *Scanner) ScanFolders(folders []string, progressCb func(models.ScanProgr
 
 		_ = filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
-				return nil // Skip unreadable folders
+				return nil
 			}
 
 			name := d.Name()
 			if d.IsDir() {
-				// Skip hidden or system folders
 				if strings.HasPrefix(name, ".") || strings.EqualFold(name, "$RECYCLE.BIN") || strings.EqualFold(name, "System Volume Information") {
 					return filepath.SkipDir
 				}
@@ -119,7 +119,7 @@ func (s *Scanner) ScanFolders(folders []string, progressCb func(models.ScanProgr
 				Path       string
 				Name       string
 				Ext        string
-				Type       models.MediaType
+				Type       media.MediaType
 				Size       int64
 				ModTime    fs.FileInfo
 				FolderRoot string
@@ -145,10 +145,9 @@ func (s *Scanner) ScanFolders(folders []string, progressCb func(models.ScanProgr
 		})
 	}
 
-	// Concurrently process fingerprints (worker pool of 8 workers)
 	workerCount := 8
 	jobs := make(chan int, len(discoveredFiles))
-	results := make([]models.MediaFile, len(discoveredFiles))
+	results := make([]media.MediaItem, len(discoveredFiles))
 	var wg sync.WaitGroup
 
 	allStates := s.store.GetAllPlaybackStates()
@@ -162,24 +161,23 @@ func (s *Scanner) ScanFolders(folders []string, progressCb func(models.ScanProgr
 				size := item.Size
 				modTime := item.ModTime.ModTime()
 
-				// Check store cache first
 				fp, cached := s.store.GetCachedFingerprint(item.Path, size, modTime)
 				if !cached {
-					computedFp, err := fingerprint.ComputeFingerprint(item.Path)
+					computedFp, err := hasher.ComputeFingerprint(item.Path)
 					if err == nil {
 						fp = computedFp
 						s.store.SetCachedFingerprint(item.Path, size, modTime, fp)
 					} else {
-						// Fallback identifier if read error
 						fp = "fp_fallback_" + item.Path
 					}
 				}
 
 				title := strings.TrimSuffix(item.Name, item.Ext)
 
-				mf := models.MediaFile{
+				mf := media.MediaItem{
 					ID:          fp,
 					Fingerprint: fp,
+					Source:      media.SourceTypeLocal,
 					Path:        item.Path,
 					Name:        item.Name,
 					Title:       title,
@@ -215,7 +213,6 @@ func (s *Scanner) ScanFolders(folders []string, progressCb func(models.ScanProgr
 	close(jobs)
 	wg.Wait()
 
-	// Sort results alphabetically by FolderRoot, RelativeDir, Name
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].FolderRoot != results[j].FolderRoot {
 			return results[i].FolderRoot < results[j].FolderRoot

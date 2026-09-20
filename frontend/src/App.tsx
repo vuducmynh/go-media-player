@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { PlayerView } from './components/PlayerView';
 import { SettingsModal } from './components/SettingsModal';
 import { HotkeysGuideModal } from './components/HotkeysGuideModal';
+import { AddYouTubeModal } from './features/youtube-loader/ui/AddYouTubeModal';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>({
@@ -39,6 +40,7 @@ export const App: React.FC = () => {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isHotkeysOpen, setIsHotkeysOpen] = useState<boolean>(false);
+  const [isAddYouTubeOpen, setIsAddYouTubeOpen] = useState<boolean>(false);
   const [isSlowHeld, setIsSlowHeld] = useState<boolean>(false);
 
   // Load initial settings and trigger scan
@@ -47,19 +49,24 @@ export const App: React.FC = () => {
       const loadedSettings = await WailsBridge.getSettings();
       setSettings(loadedSettings);
 
-      // Determine active folder
       let currentActive = loadedSettings.activeFolder;
       if (!currentActive && loadedSettings.folders && loadedSettings.folders.length > 0) {
         currentActive = loadedSettings.folders[0];
       }
       setActiveFolder(currentActive || '');
 
-      if (loadedSettings.folders && loadedSettings.folders.length > 0) {
-        setScanProgress((prev) => ({ ...prev, isScanning: true }));
-        const scannedFiles = await WailsBridge.scanFiles();
-        setFiles(scannedFiles);
-        setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: scannedFiles.length }));
-      }
+      setScanProgress((prev) => ({ ...prev, isScanning: true }));
+      const [scannedFiles, ytVideos] = await Promise.all([
+        WailsBridge.scanFiles(),
+        WailsBridge.getYouTubeVideos(),
+      ]);
+
+      const map = new Map<string, MediaFile>();
+      [...ytVideos, ...scannedFiles].forEach((f) => map.set(f.fingerprint, f));
+      const combined = Array.from(map.values());
+
+      setFiles(combined);
+      setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: combined.length }));
     } catch (err) {
       console.error('Error loading initial data:', err);
       setScanProgress((prev) => ({ ...prev, isScanning: false }));
@@ -83,7 +90,9 @@ export const App: React.FC = () => {
   const handleSelectFolder = async (folderPath: string) => {
     setActiveFolder(folderPath);
     setSettings((prev) => ({ ...prev, activeFolder: folderPath }));
-    await WailsBridge.setActiveFolder(folderPath);
+    if (folderPath !== 'YouTube' && folderPath !== 'ALL') {
+      await WailsBridge.setActiveFolder(folderPath);
+    }
   };
 
   // Handle adding folder
@@ -98,9 +107,15 @@ export const App: React.FC = () => {
 
       // Rescan files
       setScanProgress((prev) => ({ ...prev, isScanning: true }));
-      const scannedFiles = await WailsBridge.scanFiles();
-      setFiles(scannedFiles);
-      setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: scannedFiles.length }));
+      const [scannedFiles, ytVideos] = await Promise.all([
+        WailsBridge.scanFiles(),
+        WailsBridge.getYouTubeVideos(),
+      ]);
+      const map = new Map<string, MediaFile>();
+      [...ytVideos, ...scannedFiles].forEach((f) => map.set(f.fingerprint, f));
+      const combined = Array.from(map.values());
+      setFiles(combined);
+      setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: combined.length }));
     } catch (err) {
       console.error('Error adding folder:', err);
     }
@@ -119,25 +134,37 @@ export const App: React.FC = () => {
 
       // Rescan files
       setScanProgress((prev) => ({ ...prev, isScanning: true }));
-      const scannedFiles = await WailsBridge.scanFiles();
-      setFiles(scannedFiles);
-      setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: scannedFiles.length }));
+      const [scannedFiles, ytVideos] = await Promise.all([
+        WailsBridge.scanFiles(),
+        WailsBridge.getYouTubeVideos(),
+      ]);
+      const map = new Map<string, MediaFile>();
+      [...ytVideos, ...scannedFiles].forEach((f) => map.set(f.fingerprint, f));
+      const combined = Array.from(map.values());
+      setFiles(combined);
+      setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: combined.length }));
     } catch (err) {
       console.error('Error removing folder:', err);
     }
   };
 
-  // Rescan all folders
+  // Rescan all files and YouTube items
   const handleRescan = async () => {
     try {
       setScanProgress((prev) => ({ ...prev, isScanning: true }));
-      const scannedFiles = await WailsBridge.scanFiles();
-      setFiles(scannedFiles);
-      setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: scannedFiles.length }));
+      const [scannedFiles, ytVideos] = await Promise.all([
+        WailsBridge.scanFiles(),
+        WailsBridge.getYouTubeVideos(),
+      ]);
+      const map = new Map<string, MediaFile>();
+      [...ytVideos, ...scannedFiles].forEach((f) => map.set(f.fingerprint, f));
+      const combined = Array.from(map.values());
 
-      // If current file exists, refresh its info
+      setFiles(combined);
+      setScanProgress((prev) => ({ ...prev, isScanning: false, foundMedia: combined.length }));
+
       if (currentFile) {
-        const matching = scannedFiles.find((f) => f.fingerprint === currentFile.fingerprint);
+        const matching = combined.find((f) => f.fingerprint === currentFile.fingerprint);
         if (matching) {
           setCurrentFile(matching);
         }
@@ -145,6 +172,41 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error('Error rescanning files:', err);
       setScanProgress((prev) => ({ ...prev, isScanning: false }));
+    }
+  };
+
+  // Add and immediately play YouTube video
+  const handleAddAndPlayYouTube = async (url: string): Promise<MediaFile | null> => {
+    try {
+      const newMedia = await WailsBridge.addYouTubeVideo(url);
+      if (!newMedia) return null;
+
+      setFiles((prev) => {
+        const exists = prev.some((f) => f.fingerprint === newMedia.fingerprint);
+        if (exists) {
+          return prev.map((f) => (f.fingerprint === newMedia.fingerprint ? newMedia : f));
+        }
+        return [newMedia, ...prev];
+      });
+
+      setCurrentFile(newMedia);
+      return newMedia;
+    } catch (err) {
+      console.error('Error adding YouTube video:', err);
+      return null;
+    }
+  };
+
+  // Remove YouTube video from library
+  const handleRemoveYouTubeVideo = async (videoIdOrId: string) => {
+    try {
+      await WailsBridge.removeYouTubeVideo(videoIdOrId);
+      setFiles((prev) => prev.filter((f) => f.id !== videoIdOrId && f.youtubeId !== videoIdOrId));
+      if (currentFile && (currentFile.id === videoIdOrId || currentFile.youtubeId === videoIdOrId)) {
+        setCurrentFile(null);
+      }
+    } catch (err) {
+      console.error('Error removing YouTube video:', err);
     }
   };
 
@@ -268,21 +330,26 @@ export const App: React.FC = () => {
     );
   }, []);
 
-  // Filtered files within active folder for next/previous navigation
+  // Filtered files within active folder / filter for next/previous navigation
   const activeFolderFiles = useMemo(() => {
     return files.filter((file) => {
+      const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
+
+      if (activeFilter === 'youtube') return isYt;
+      if (activeFolder === 'YouTube') return isYt;
+
       if (activeFolder && activeFolder !== 'ALL' && file.folderRoot !== activeFolder) {
         return false;
       }
       if (activeFilter === 'audio' && file.type !== 'audio') return false;
-      if (activeFilter === 'video' && file.type !== 'video') return false;
+      if (activeFilter === 'video' && (file.type !== 'video' || isYt)) return false;
       if (activeFilter === 'in_progress' && (file.completed || file.lastPosition <= 0)) return false;
       if (activeFilter === 'completed' && !file.completed) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = file.name.toLowerCase().includes(q);
-        const matchTitle = file.title.toLowerCase().includes(q);
-        const matchDir = file.relativeDir.toLowerCase().includes(q);
+        const matchTitle = (file.title || '').toLowerCase().includes(q);
+        const matchDir = (file.relativeDir || '').toLowerCase().includes(q);
         if (!matchName && !matchTitle && !matchDir) return false;
       }
       return true;
@@ -324,7 +391,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-fluent-bg-darker text-fluent-text-primary">
-      {/* Sidebar with isolated Folder Switcher */}
+      {/* Sidebar with isolated Folder Switcher & YouTube Hub */}
       <Sidebar
         files={files}
         currentFile={currentFile}
@@ -337,6 +404,8 @@ export const App: React.FC = () => {
         onAddFolder={handleAddFolder}
         onRemoveFolder={handleRemoveFolder}
         onSelectFolder={handleSelectFolder}
+        onOpenAddYouTube={() => setIsAddYouTubeOpen(true)}
+        onRemoveYouTubeVideo={handleRemoveYouTubeVideo}
         onRescan={handleRescan}
         onFilterChange={setActiveFilter}
         onSearchChange={setSearchQuery}
@@ -347,7 +416,7 @@ export const App: React.FC = () => {
         onClearAllProgress={handleClearAllProgress}
       />
 
-      {/* Main Player View (with connected hotkeys) */}
+      {/* Main Player View (with connected hotkeys & YouTube deep listening controls) */}
       <PlayerView
         currentFile={currentFile}
         settings={settings}
@@ -359,7 +428,14 @@ export const App: React.FC = () => {
         setSlowSpeedActive={setIsSlowHeld}
       />
 
-      {/* Modals */}
+      {/* Add YouTube Video Modal */}
+      <AddYouTubeModal
+        isOpen={isAddYouTubeOpen}
+        onClose={() => setIsAddYouTubeOpen(false)}
+        onAddAndPlay={handleAddAndPlayYouTube}
+      />
+
+      {/* Settings & Hotkeys Modals */}
       <SettingsModal
         isOpen={isSettingsOpen}
         settings={settings}
@@ -377,4 +453,5 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
 export default App;

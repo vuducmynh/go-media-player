@@ -1,4 +1,4 @@
-package fingerprint
+package hasher
 
 import (
 	"crypto/sha256"
@@ -28,19 +28,19 @@ func ComputeFingerprint(filePath string) (string, error) {
 	}
 
 	size := stat.Size()
-	hasher := sha256.New()
+	h := sha256.New()
 
 	// 1. Write file size to hash
 	sizeBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(sizeBuf, uint64(size))
-	hasher.Write(sizeBuf)
+	h.Write(sizeBuf)
 
 	// If file is small, read entirely
 	if size <= ChunkSize*3 {
-		if _, err := io.Copy(hasher, file); err != nil {
+		if _, err := io.Copy(h, file); err != nil {
 			return "", fmt.Errorf("read full file failed: %w", err)
 		}
-		return "fp_" + hex.EncodeToString(hasher.Sum(nil)), nil
+		return "fp_" + hex.EncodeToString(h.Sum(nil)), nil
 	}
 
 	// 2. Read Head chunk (first 64KB)
@@ -48,7 +48,7 @@ func ComputeFingerprint(filePath string) (string, error) {
 	if _, err := file.ReadAt(headBuf, 0); err != nil && err != io.EOF {
 		return "", fmt.Errorf("read head chunk failed: %w", err)
 	}
-	hasher.Write(headBuf)
+	h.Write(headBuf)
 
 	// 3. Read Middle chunk (64KB at center)
 	midOffset := (size - ChunkSize) / 2
@@ -56,7 +56,7 @@ func ComputeFingerprint(filePath string) (string, error) {
 	if _, err := file.ReadAt(midBuf, midOffset); err != nil && err != io.EOF {
 		return "", fmt.Errorf("read mid chunk failed: %w", err)
 	}
-	hasher.Write(midBuf)
+	h.Write(midBuf)
 
 	// 4. Read Tail chunk (last 64KB)
 	tailOffset := size - ChunkSize
@@ -64,7 +64,7 @@ func ComputeFingerprint(filePath string) (string, error) {
 	if _, err := file.ReadAt(tailBuf, tailOffset); err != nil && err != io.EOF {
 		return "", fmt.Errorf("read tail chunk failed: %w", err)
 	}
-	hasher.Write(tailBuf)
+	h.Write(tailBuf)
 
-	return "fp_" + hex.EncodeToString(hasher.Sum(nil)), nil
+	return "fp_" + hex.EncodeToString(h.Sum(nil)), nil
 }

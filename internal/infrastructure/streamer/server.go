@@ -22,7 +22,6 @@ type StreamServer struct {
 }
 
 func init() {
-	// Register common media MIME types
 	_ = mime.AddExtensionType(".mp3", "audio/mpeg")
 	_ = mime.AddExtensionType(".m4a", "audio/mp4")
 	_ = mime.AddExtensionType(".wav", "audio/wav")
@@ -62,7 +61,7 @@ func NewStreamServer() (*StreamServer, error) {
 	ss.server = &http.Server{
 		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 0, // Streaming needs no write timeout
+		WriteTimeout: 0,
 	}
 
 	go func() {
@@ -73,7 +72,6 @@ func NewStreamServer() (*StreamServer, error) {
 }
 
 func (ss *StreamServer) handleStream(w http.ResponseWriter, r *http.Request) {
-	// Enable CORS for localhost / Wails webview
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Range, Content-Type, Accept")
@@ -90,7 +88,6 @@ func (ss *StreamServer) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clean and verify file exists
 	filePath = filepath.Clean(filePath)
 	fileInfo, err := os.Stat(filePath)
 	if err != nil || fileInfo.IsDir() {
@@ -113,7 +110,6 @@ func (ss *StreamServer) handleStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Accept-Ranges", "bytes")
 
-	// http.ServeContent handles HTTP Range 206, partial requests, conditional gets, etc.
 	http.ServeContent(w, r, fileInfo.Name(), fileInfo.ModTime(), file)
 }
 

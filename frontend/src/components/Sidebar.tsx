@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Trash2,
   Clock,
+  Youtube,
 } from 'lucide-react';
 import { MediaFile, FilterCategory, ScanProgress, AppSettings } from '../types';
 import { formatTime, formatFileSize, formatDate } from '../utils/formatters';
@@ -33,6 +34,8 @@ interface SidebarProps {
   onAddFolder: () => void;
   onRemoveFolder: (folder: string) => void;
   onSelectFolder: (folder: string) => void;
+  onOpenAddYouTube: () => void;
+  onRemoveYouTubeVideo?: (videoId: string) => void;
   onRescan: () => void;
   onFilterChange: (filter: FilterCategory) => void;
   onSearchChange: (query: string) => void;
@@ -55,6 +58,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onAddFolder,
   onRemoveFolder,
   onSelectFolder,
+  onOpenAddYouTube,
+  onRemoveYouTubeVideo,
   onRescan,
   onFilterChange,
   onSearchChange,
@@ -65,6 +70,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClearAllProgress,
 }) => {
   const [isFolderPickerExpanded, setIsFolderPickerExpanded] = useState(false);
+
+  // Calculate YouTube count
+  const youtubeFiles = useMemo(() => {
+    return files.filter((f) => f.source === 'youtube' || Boolean(f.youtubeId));
+  }, [files]);
 
   // Group files count by root folder
   const folderStats = settings.folders.map((folder) => {
@@ -87,7 +97,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Filter and sort files by active folder, search, and category filters
   const currentFolderFiles = useMemo(() => {
     let list = files.filter((file) => {
-      // If an activeFolder is selected, ONLY show files from this folder
+      const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
+
+      // If category filter is specifically youtube
+      if (activeFilter === 'youtube') {
+        return isYt;
+      }
+
+      // If activeFolder is 'YouTube'
+      if (activeFolder === 'YouTube') {
+        return isYt;
+      }
+
+      // If an activeFolder is selected (and not ALL), ONLY show files from this folder
       if (activeFolder && activeFolder !== 'ALL') {
         if (file.folderRoot !== activeFolder) {
           return false;
@@ -96,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       // Category filter
       if (activeFilter === 'audio' && file.type !== 'audio') return false;
-      if (activeFilter === 'video' && file.type !== 'video') return false;
+      if (activeFilter === 'video' && (file.type !== 'video' || isYt)) return false;
       if (activeFilter === 'in_progress') {
         if (file.completed || file.lastPosition <= 0) return false;
       }
@@ -106,8 +128,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = file.name.toLowerCase().includes(q);
-        const matchTitle = file.title.toLowerCase().includes(q);
-        const matchDir = file.relativeDir.toLowerCase().includes(q);
+        const matchTitle = (file.title || '').toLowerCase().includes(q);
+        const matchDir = (file.relativeDir || '').toLowerCase().includes(q);
         if (!matchName && !matchTitle && !matchDir) return false;
       }
 
@@ -128,12 +150,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const activeFolderStat = folderStats.find((f) => f.path === activeFolder);
   const currentFolderName =
-    activeFolder === 'ALL'
+    activeFolder === 'YouTube'
+      ? 'YouTube Collection'
+      : activeFolder === 'ALL'
       ? 'Tất cả thư mục'
       : activeFolderStat?.name || (activeFolder.split(/[\\/]/).filter(Boolean).pop() || 'Thư mục');
 
-  const totalAudioInActive = currentFolderFiles.filter((f) => f.type === 'audio').length;
-  const totalVideoInActive = currentFolderFiles.filter((f) => f.type === 'video').length;
+  const totalAudioInActive = currentFolderFiles.filter((f) => f.type === 'audio' && f.source !== 'youtube').length;
+  const totalVideoInActive = currentFolderFiles.filter((f) => f.type === 'video' && f.source !== 'youtube').length;
+  const totalYouTubeInActive = currentFolderFiles.filter((f) => f.source === 'youtube' || Boolean(f.youtubeId)).length;
 
   return (
     <aside className="w-80 sm:w-96 h-full flex flex-col bg-fluent-bg-dark border-r border-white/5 select-none relative z-30">
@@ -192,19 +217,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* FOLDER SWITCHER (Dedicated Folder Separation) */}
+      {/* FOLDER SWITCHER (Dedicated Folder Separation + YouTube Entry) */}
       <div className="p-3 border-b border-white/5 bg-fluent-bg-card/40">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fluent-text-muted flex items-center gap-1">
-            <Layers className="w-3.5 h-3.5 text-fluent-accent" /> Thư mục đang mở:
+            <Layers className="w-3.5 h-3.5 text-fluent-accent" /> Nguồn phát:
           </span>
-          <button
-            onClick={onAddFolder}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-fluent-accent/15 hover:bg-fluent-accent/25 text-fluent-accent border border-fluent-accent/30 text-[11px] font-medium transition-all shadow-sm"
-          >
-            <FolderPlus className="w-3 h-3" />
-            <span>+ Thêm</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onOpenAddYouTube}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-[11px] font-medium transition-all shadow-sm"
+              title="Nhúng video YouTube để luyện nghe"
+            >
+              <Youtube className="w-3 h-3 text-red-400" />
+              <span>+ YouTube</span>
+            </button>
+            <button
+              onClick={onAddFolder}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-fluent-accent/15 hover:bg-fluent-accent/25 text-fluent-accent border border-fluent-accent/30 text-[11px] font-medium transition-all shadow-sm"
+            >
+              <FolderPlus className="w-3 h-3" />
+              <span>+ Thêm</span>
+            </button>
+          </div>
         </div>
 
         {/* Current Active Folder Banner / Dropdown Trigger */}
@@ -214,15 +249,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="w-full flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-fluent-bg-card to-fluent-bg-hover border border-fluent-accent/40 shadow-sm hover:border-fluent-accent text-left transition-all group"
           >
             <div className="flex items-center gap-2 truncate flex-1 mr-2">
-              <div className="w-7 h-7 rounded-lg bg-fluent-accent/20 border border-fluent-accent/30 flex items-center justify-center shrink-0">
-                <FolderOpen className="w-4 h-4 text-fluent-accent" />
+              <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${
+                activeFolder === 'YouTube'
+                  ? 'bg-red-600/20 border-red-500/40 text-red-400'
+                  : 'bg-fluent-accent/20 border-fluent-accent/30 text-fluent-accent'
+              }`}>
+                {activeFolder === 'YouTube' ? (
+                  <Youtube className="w-4 h-4" />
+                ) : (
+                  <FolderOpen className="w-4 h-4" />
+                )}
               </div>
               <div className="truncate">
                 <p className="text-xs font-bold text-white truncate group-hover:text-fluent-accent transition-colors">
                   {currentFolderName}
                 </p>
                 <p className="text-[10px] text-fluent-text-secondary truncate">
-                  {activeFolder === 'ALL'
+                  {activeFolder === 'YouTube'
+                    ? `${youtubeFiles.length} video YouTube đã lưu`
+                    : activeFolder === 'ALL'
                     ? `${files.length} media tổng hợp`
                     : activeFolderStat
                     ? `${activeFolderStat.total} file (${activeFolderStat.audio} audio, ${activeFolderStat.video} video)`
@@ -240,78 +285,88 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Collapsible Dropdown for Switching Folders */}
           {isFolderPickerExpanded && (
             <div className="mt-2 p-1.5 bg-fluent-bg-darker border border-white/10 rounded-xl shadow-2xl space-y-1 max-h-56 overflow-y-auto z-40">
-              {settings.folders.length === 0 ? (
-                <div className="p-3 text-center text-fluent-text-muted text-[11px]">
-                  Chưa có thư mục nào. Nhấn "+ Thêm" để chọn thư mục.
+              {/* YouTube Category Item */}
+              {youtubeFiles.length > 0 && (
+                <div
+                  onClick={() => {
+                    onSelectFolder('YouTube');
+                    setIsFolderPickerExpanded(false);
+                  }}
+                  className={`flex items-center justify-between p-2 rounded-lg text-xs transition-all cursor-pointer ${
+                    activeFolder === 'YouTube'
+                      ? 'bg-red-600/20 border border-red-500/40 text-red-400 font-semibold'
+                      : 'hover:bg-white/5 text-fluent-text-secondary hover:text-white border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Youtube className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span>YouTube Library ({youtubeFiles.length} video)</span>
+                  </div>
                 </div>
-              ) : (
-                <>
-                  {/* Folder Items */}
-                  {folderStats.map((fStat) => {
-                    const isSelected = activeFolder === fStat.path;
-                    return (
-                      <div
-                        key={fStat.path}
-                        className={`flex items-center justify-between p-2 rounded-lg text-xs transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-fluent-accent/20 border border-fluent-accent/40 text-fluent-accent font-semibold'
-                            : 'hover:bg-white/5 text-fluent-text-secondary hover:text-white border border-transparent'
-                        }`}
-                        onClick={() => {
-                          onSelectFolder(fStat.path);
-                          setIsFolderPickerExpanded(false);
-                        }}
-                      >
-                        <div className="flex items-center gap-2 truncate flex-1 mr-2" title={fStat.path}>
-                          <Folder className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-fluent-accent' : ''}`} />
-                          <div className="truncate">
-                            <span className="truncate block font-medium">{fStat.name}</span>
-                            <span className="text-[10px] text-fluent-text-muted font-normal block truncate">
-                              {fStat.total} file ({fStat.audio} 🎵, {fStat.video} 🎬)
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Folder Action buttons */}
-                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => onOpenFileFolder(fStat.path)}
-                            title="Mở thư mục trong Explorer"
-                            className="p-1 rounded hover:bg-white/10 text-fluent-text-muted hover:text-white"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => onRemoveFolder(fStat.path)}
-                            title="Xóa khỏi danh sách quản lý"
-                            className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* All Folders Option */}
-                  {settings.folders.length > 1 && (
-                    <div
-                      onClick={() => {
-                        onSelectFolder('ALL');
-                        setIsFolderPickerExpanded(false);
-                      }}
-                      className={`flex items-center gap-2 p-2 rounded-lg text-xs transition-all cursor-pointer border-t border-white/5 ${
-                        activeFolder === 'ALL'
-                          ? 'bg-fluent-accent/20 border-fluent-accent/40 text-fluent-accent font-semibold'
-                          : 'hover:bg-white/5 text-fluent-text-muted hover:text-white'
-                      }`}
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                      <span>Xem tất cả thư mục ({files.length} file)</span>
-                    </div>
-                  )}
-                </>
               )}
+
+              {/* Local Folder Items */}
+              {folderStats.map((fStat) => {
+                const isSelected = activeFolder === fStat.path;
+                return (
+                  <div
+                    key={fStat.path}
+                    className={`flex items-center justify-between p-2 rounded-lg text-xs transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-fluent-accent/20 border border-fluent-accent/40 text-fluent-accent font-semibold'
+                        : 'hover:bg-white/5 text-fluent-text-secondary hover:text-white border border-transparent'
+                    }`}
+                    onClick={() => {
+                      onSelectFolder(fStat.path);
+                      setIsFolderPickerExpanded(false);
+                    }}
+                  >
+                    <div className="flex items-center gap-2 truncate flex-1 mr-2" title={fStat.path}>
+                      <Folder className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-fluent-accent' : ''}`} />
+                      <div className="truncate">
+                        <span className="truncate block font-medium">{fStat.name}</span>
+                        <span className="text-[10px] text-fluent-text-muted font-normal block truncate">
+                          {fStat.total} file ({fStat.audio} 🎵, {fStat.video} 🎬)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Folder Action buttons */}
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => onOpenFileFolder(fStat.path)}
+                        title="Mở thư mục trong Explorer"
+                        className="p-1 rounded hover:bg-white/10 text-fluent-text-muted hover:text-white"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => onRemoveFolder(fStat.path)}
+                        title="Xóa khỏi danh sách quản lý"
+                        className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* All Folders Option */}
+              <div
+                onClick={() => {
+                  onSelectFolder('ALL');
+                  setIsFolderPickerExpanded(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg text-xs transition-all cursor-pointer border-t border-white/5 ${
+                  activeFolder === 'ALL'
+                    ? 'bg-fluent-accent/20 border-fluent-accent/40 text-fluent-accent font-semibold'
+                    : 'hover:bg-white/5 text-fluent-text-muted hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Xem tất cả ({files.length} nội dung)</span>
+              </div>
             </div>
           )}
         </div>
@@ -340,7 +395,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={`Tìm trong ${currentFolderName}...`}
+            placeholder={`Tìm kiếm media...`}
             className="w-full pl-8 pr-7 py-1.5 bg-fluent-bg-card border border-white/5 rounded-lg text-xs text-white placeholder-fluent-text-muted focus:outline-none focus:border-fluent-accent transition-colors"
           />
           {searchQuery && (
@@ -354,7 +409,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Category Filters */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-thin">
           <button
             onClick={() => onFilterChange('all')}
             className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors ${
@@ -384,6 +439,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             <Film className="w-3 h-3" /> Video ({totalVideoInActive})
+          </button>
+          <button
+            onClick={() => onFilterChange('youtube')}
+            className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
+              activeFilter === 'youtube'
+                ? 'bg-red-600 text-white font-bold shadow-sm shadow-red-600/30'
+                : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Youtube className="w-3 h-3 text-red-400" /> YouTube ({youtubeFiles.length})
           </button>
           <button
             onClick={() => onFilterChange('in_progress')}
@@ -431,18 +496,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 overflow-y-auto divide-y divide-white/[0.03]">
         {currentFolderFiles.length === 0 ? (
           <div className="p-8 text-center text-fluent-text-muted text-xs flex flex-col items-center justify-center h-full">
-            <FolderOpen className="w-10 h-10 text-white/10 mb-3" />
-            {settings.folders.length === 0 ? (
-              <p>Chưa có thư mục nào. Nhấn "+ Thêm" ở trên để chọn thư mục media.</p>
-            ) : activeFilter === 'in_progress' ? (
-              <p>Danh sách đang nghe trống. Bạn chưa nghe dở file nào.</p>
+            {activeFilter === 'youtube' ? (
+              <>
+                <Youtube className="w-10 h-10 text-red-500/20 mb-3" />
+                <p>Chưa có video YouTube nào.</p>
+                <button
+                  onClick={onOpenAddYouTube}
+                  className="mt-3 px-3 py-1 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs transition-colors"
+                >
+                  + Nhúng link YouTube ngay
+                </button>
+              </>
             ) : (
-              <p>Không có file nào trong thư mục này phù hợp với bộ lọc.</p>
+              <>
+                <FolderOpen className="w-10 h-10 text-white/10 mb-3" />
+                {settings.folders.length === 0 ? (
+                  <p>Chưa có thư mục nào. Nhấn "+ Thêm" ở trên để chọn thư mục media.</p>
+                ) : activeFilter === 'in_progress' ? (
+                  <p>Danh sách đang nghe trống. Bạn chưa nghe dở file nào.</p>
+                ) : (
+                  <p>Không có file nào trong thư mục này phù hợp với bộ lọc.</p>
+                )}
+              </>
             )}
           </div>
         ) : (
           currentFolderFiles.map((file) => {
             const isSelected = currentFile?.fingerprint === file.fingerprint;
+            const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
             const progressPercent =
               file.duration > 0
                 ? Math.min(100, (file.lastPosition / file.duration) * 100)
@@ -454,35 +535,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onSelectFile(file)}
                 className={`p-2.5 flex items-start gap-3 cursor-pointer group transition-all relative ${
                   isSelected
-                    ? 'bg-fluent-accent/15 border-l-4 border-fluent-accent shadow-inner'
+                    ? isYt
+                      ? 'bg-red-600/15 border-l-4 border-red-500 shadow-inner'
+                      : 'bg-fluent-accent/15 border-l-4 border-fluent-accent shadow-inner'
                     : 'hover:bg-white/[0.04]'
                 }`}
               >
-                {/* Type Icon */}
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border ${
-                    isSelected
-                      ? 'bg-fluent-accent text-black border-fluent-accent font-bold shadow-accent-glow'
-                      : file.type === 'video'
-                      ? 'bg-purple-950/40 text-purple-400 border-purple-800/40'
-                      : 'bg-blue-950/40 text-blue-400 border-blue-800/40'
-                  }`}
-                >
-                  {isSelected ? (
-                    <Play className="w-4 h-4 fill-current" />
-                  ) : file.type === 'video' ? (
-                    <Film className="w-4 h-4" />
-                  ) : (
-                    <Music className="w-4 h-4" />
-                  )}
-                </div>
+                {/* Thumbnail / Type Icon */}
+                {isYt && file.thumbnail ? (
+                  <div className="relative w-12 h-8 rounded-lg overflow-hidden bg-black shrink-0 border border-white/10 mt-0.5">
+                    <img
+                      src={file.thumbnail}
+                      alt="Thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                      <Play className="w-3 h-3 text-white fill-white" />
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border ${
+                      isSelected
+                        ? isYt
+                          ? 'bg-red-600 text-white border-red-500 font-bold shadow-lg shadow-red-600/30'
+                          : 'bg-fluent-accent text-black border-fluent-accent font-bold shadow-accent-glow'
+                        : isYt
+                        ? 'bg-red-950/40 text-red-400 border-red-800/40'
+                        : file.type === 'video'
+                        ? 'bg-purple-950/40 text-purple-400 border-purple-800/40'
+                        : 'bg-blue-950/40 text-blue-400 border-blue-800/40'
+                    }`}
+                  >
+                    {isSelected ? (
+                      <Play className="w-4 h-4 fill-current" />
+                    ) : isYt ? (
+                      <Youtube className="w-4 h-4" />
+                    ) : file.type === 'video' ? (
+                      <Film className="w-4 h-4" />
+                    ) : (
+                      <Music className="w-4 h-4" />
+                    )}
+                  </div>
+                )}
 
                 {/* File Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
                     <p
                       className={`text-xs font-medium truncate ${
-                        isSelected ? 'text-fluent-accent font-semibold' : 'text-white'
+                        isSelected
+                          ? isYt
+                            ? 'text-red-400 font-semibold'
+                            : 'text-fluent-accent font-semibold'
+                          : 'text-white'
                       }`}
                     >
                       {file.title || file.name}
@@ -490,8 +596,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                     {/* Right action group: Clear button and status/duration */}
                     <div className="flex items-center gap-1 shrink-0">
+                      {/* Delete YouTube item button */}
+                      {isYt && onRemoveYouTubeVideo && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveYouTubeVideo(file.youtubeId || file.id);
+                          }}
+                          title="Xóa video YouTube khỏi danh sách"
+                          className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+
                       {/* Clear progress button for individual file */}
-                      {file.lastPosition > 0 && onClearFileProgress && (
+                      {!isYt && file.lastPosition > 0 && onClearFileProgress && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -519,13 +640,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
 
-                  {/* Subfolder relative path and last played time */}
+                  {/* Subfolder relative path / YouTube Channel and last played time */}
                   <div className="flex items-center justify-between text-[10px] text-fluent-text-muted mt-0.5">
                     <p className="truncate flex items-center gap-1 min-w-0 flex-1 mr-1">
-                      {file.relativeDir && (
-                        <span className="px-1 py-0.2 bg-white/5 rounded text-[9px] text-fluent-text-secondary shrink-0">
-                          📁 {file.relativeDir}
+                      {isYt ? (
+                        <span className="px-1 py-0.2 bg-red-600/15 text-red-400 rounded text-[9px] shrink-0 font-medium">
+                          📺 {file.relativeDir || 'YouTube'}
                         </span>
+                      ) : (
+                        file.relativeDir && (
+                          <span className="px-1 py-0.2 bg-white/5 rounded text-[9px] text-fluent-text-secondary shrink-0">
+                            📁 {file.relativeDir}
+                          </span>
+                        )
                       )}
                       <span className="truncate">{file.name}</span>
                     </p>
@@ -541,13 +668,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
                       <div
                         className={`h-full ${
-                          file.completed ? 'bg-emerald-400' : 'bg-fluent-accent'
+                          file.completed
+                            ? 'bg-emerald-400'
+                            : isYt
+                            ? 'bg-red-500'
+                            : 'bg-fluent-accent'
                         }`}
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
                     <span className="text-[9px] text-fluent-text-muted font-mono shrink-0">
-                      {formatFileSize(file.size)}
+                      {isYt ? 'YouTube' : formatFileSize(file.size)}
                     </span>
                   </div>
                 </div>
@@ -559,7 +690,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Status */}
       <div className="p-2.5 border-t border-white/5 bg-fluent-bg-darker text-[10px] text-fluent-text-muted flex items-center justify-between">
-        <span>{currentFolderFiles.length} file trong thư mục</span>
+        <span>{currentFolderFiles.length} mục trong danh sách</span>
         <span className="text-fluent-accent/70">Smart Fingerprint</span>
       </div>
     </aside>

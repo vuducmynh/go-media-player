@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"go-audio-play/pkg/models"
+	"go-audio-play/internal/domain/library"
+	"go-audio-play/internal/domain/media"
+	"go-audio-play/internal/domain/playback"
 )
 
 type FileCacheEntry struct {
@@ -18,9 +20,9 @@ type FileCacheEntry struct {
 }
 
 type StoreData struct {
-	Settings       models.AppSettings                  `json:"settings"`
-	PlaybackStates map[string]*models.PlaybackState    `json:"playbackStates"`
-	FileCache      map[string]FileCacheEntry           `json:"fileCache"` // path -> cache entry
+	Settings       library.AppSettings                `json:"settings"`
+	PlaybackStates map[string]*playback.PlaybackState `json:"playbackStates"`
+	FileCache      map[string]FileCacheEntry          `json:"fileCache"` // path -> cache entry
 }
 
 type Store struct {
@@ -44,8 +46,8 @@ func NewStore() (*Store, error) {
 	store := &Store{
 		filePath: dataFilePath,
 		data: StoreData{
-			Settings:       models.DefaultSettings(),
-			PlaybackStates: make(map[string]*models.PlaybackState),
+			Settings:       library.DefaultSettings(),
+			PlaybackStates: make(map[string]*playback.PlaybackState),
 			FileCache:      make(map[string]FileCacheEntry),
 		},
 	}
@@ -56,10 +58,13 @@ func NewStore() (*Store, error) {
 			var loaded StoreData
 			if err := json.Unmarshal(content, &loaded); err == nil {
 				if loaded.PlaybackStates == nil {
-					loaded.PlaybackStates = make(map[string]*models.PlaybackState)
+					loaded.PlaybackStates = make(map[string]*playback.PlaybackState)
 				}
 				if loaded.FileCache == nil {
 					loaded.FileCache = make(map[string]FileCacheEntry)
+				}
+				if loaded.Settings.YouTubeVideos == nil {
+					loaded.Settings.YouTubeVideos = []media.YouTubeItem{}
 				}
 				// Default values if missing
 				if loaded.Settings.JumpSeconds <= 0 {
@@ -107,22 +112,58 @@ func (s *Store) saveLocked() error {
 }
 
 // GetSettings retrieves current user settings
-func (s *Store) GetSettings() models.AppSettings {
+func (s *Store) GetSettings() library.AppSettings {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.data.Settings
 }
 
 // SaveSettings persists updated settings
-func (s *Store) SaveSettings(settings models.AppSettings) error {
+func (s *Store) SaveSettings(settings library.AppSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data.Settings = settings
 	return s.saveLocked()
 }
 
+// SaveYouTubeVideo adds or updates a saved YouTube item in the library
+func (s *Store) SaveYouTubeVideo(item media.YouTubeItem) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if already exists
+	updated := false
+	for i, v := range s.data.Settings.YouTubeVideos {
+		if v.VideoID == item.VideoID {
+			s.data.Settings.YouTubeVideos[i] = item
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		s.data.Settings.YouTubeVideos = append([]media.YouTubeItem{item}, s.data.Settings.YouTubeVideos...)
+	}
+
+	return s.saveLocked()
+}
+
+// RemoveYouTubeVideo removes a YouTube item from the library
+func (s *Store) RemoveYouTubeVideo(videoID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var updated []media.YouTubeItem
+	for _, v := range s.data.Settings.YouTubeVideos {
+		if v.VideoID != videoID {
+			updated = append(updated, v)
+		}
+	}
+	s.data.Settings.YouTubeVideos = updated
+	return s.saveLocked()
+}
+
 // GetPlaybackState returns saved state for a fingerprint
-func (s *Store) GetPlaybackState(fingerprint string) *models.PlaybackState {
+func (s *Store) GetPlaybackState(fingerprint string) *playback.PlaybackState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if state, exists := s.data.PlaybackStates[fingerprint]; exists {
@@ -133,10 +174,10 @@ func (s *Store) GetPlaybackState(fingerprint string) *models.PlaybackState {
 }
 
 // GetAllPlaybackStates returns all saved states
-func (s *Store) GetAllPlaybackStates() map[string]*models.PlaybackState {
+func (s *Store) GetAllPlaybackStates() map[string]*playback.PlaybackState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	result := make(map[string]*models.PlaybackState, len(s.data.PlaybackStates))
+	result := make(map[string]*playback.PlaybackState, len(s.data.PlaybackStates))
 	for k, v := range s.data.PlaybackStates {
 		cpy := *v
 		result[k] = &cpy
@@ -145,7 +186,7 @@ func (s *Store) GetAllPlaybackStates() map[string]*models.PlaybackState {
 }
 
 // SavePlaybackState persists playback state for a fingerprint
-func (s *Store) SavePlaybackState(state models.PlaybackState) error {
+func (s *Store) SavePlaybackState(state playback.PlaybackState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -168,7 +209,7 @@ func (s *Store) ClearAllPlaybackStates() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.data.PlaybackStates = make(map[string]*models.PlaybackState)
+	s.data.PlaybackStates = make(map[string]*playback.PlaybackState)
 	return s.saveLocked()
 }
 
@@ -195,6 +236,5 @@ func (s *Store) SetCachedFingerprint(path string, size int64, modTime time.Time,
 		Size:        size,
 		ModTime:     modTime,
 	}
-	// Debounced or direct save
 	_ = s.saveLocked()
 }

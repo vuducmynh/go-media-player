@@ -8,20 +8,24 @@ import (
 	"runtime"
 	"strings"
 
-	"go-audio-play/pkg/models"
-	"go-audio-play/pkg/scanner"
-	"go-audio-play/pkg/storage"
-	"go-audio-play/pkg/streamer"
+	"go-audio-play/internal/application"
+	"go-audio-play/internal/domain/library"
+	"go-audio-play/internal/domain/media"
+	"go-audio-play/internal/infrastructure/scanner"
+	"go-audio-play/internal/infrastructure/storage"
+	"go-audio-play/internal/infrastructure/streamer"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// App struct
+// App struct acts as the IPC Facade Controller connecting Wails UI to Application Services
 type App struct {
-	ctx      context.Context
-	store    *storage.Store
-	scanner  *scanner.Scanner
-	streamer *streamer.StreamServer
+	ctx          context.Context
+	store        *storage.Store
+	streamer     *streamer.StreamServer
+	mediaSvc     *application.MediaService
+	playbackSvc  *application.PlaybackService
+	youtubeSvc   *application.YouTubeService
 }
 
 // NewApp creates a new App application struct
@@ -29,8 +33,7 @@ func NewApp() *App {
 	return &App{}
 }
 
-// startup is called when the app starts. The context is saved
-// so we can call the runtime methods
+// startup is called when the app starts
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
@@ -46,7 +49,11 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.streamer = streamerSrv
 
-	a.scanner = scanner.NewScanner(a.store)
+	scannerSrv := scanner.NewScanner(a.store)
+
+	a.mediaSvc = application.NewMediaService(a.store, scannerSrv, a.streamer)
+	a.playbackSvc = application.NewPlaybackService(a.store)
+	a.youtubeSvc = application.NewYouTubeService(a.store)
 }
 
 // shutdown is called when the app terminates
@@ -69,156 +76,112 @@ func (a *App) SelectFolderDialog() (string, error) {
 
 // AddFolder adds a new directory to managed folders
 func (a *App) AddFolder(folderPath string) ([]string, error) {
-	if folderPath == "" {
-		return nil, fmt.Errorf("folder path cannot be empty")
+	if a.mediaSvc == nil {
+		return nil, fmt.Errorf("media service not initialized")
 	}
-
-	cleanPath := filepath.Clean(folderPath)
-	settings := a.store.GetSettings()
-
-	alreadyExists := false
-	for _, f := range settings.Folders {
-		if strings.EqualFold(filepath.Clean(f), cleanPath) {
-			alreadyExists = true
-			break
-		}
-	}
-
-	if !alreadyExists {
-		settings.Folders = append(settings.Folders, cleanPath)
-	}
-
-	// Set as active folder
-	settings.ActiveFolder = cleanPath
-
-	if err := a.store.SaveSettings(settings); err != nil {
-		return nil, err
-	}
-
-	return settings.Folders, nil
+	return a.mediaSvc.AddFolder(folderPath)
 }
 
 // RemoveFolder removes a directory from managed folders
 func (a *App) RemoveFolder(folderPath string) ([]string, error) {
-	cleanPath := filepath.Clean(folderPath)
-	settings := a.store.GetSettings()
-
-	var updated []string
-	for _, f := range settings.Folders {
-		if !strings.EqualFold(filepath.Clean(f), cleanPath) {
-			updated = append(updated, f)
-		}
+	if a.mediaSvc == nil {
+		return nil, fmt.Errorf("media service not initialized")
 	}
-
-	settings.Folders = updated
-	if strings.EqualFold(settings.ActiveFolder, cleanPath) {
-		if len(updated) > 0 {
-			settings.ActiveFolder = updated[0]
-		} else {
-			settings.ActiveFolder = ""
-		}
-	}
-
-	if err := a.store.SaveSettings(settings); err != nil {
-		return nil, err
-	}
-
-	return settings.Folders, nil
+	return a.mediaSvc.RemoveFolder(folderPath)
 }
 
 // SetActiveFolder sets and persists current active folder
 func (a *App) SetActiveFolder(folderPath string) error {
-	settings := a.store.GetSettings()
-	if folderPath != "" {
-		settings.ActiveFolder = filepath.Clean(folderPath)
-	} else {
-		settings.ActiveFolder = ""
+	if a.mediaSvc == nil {
+		return fmt.Errorf("media service not initialized")
 	}
-	return a.store.SaveSettings(settings)
+	return a.mediaSvc.SetActiveFolder(folderPath)
 }
 
 // GetSettings returns current application preferences
-func (a *App) GetSettings() models.AppSettings {
+func (a *App) GetSettings() library.AppSettings {
 	if a.store == nil {
-		return models.DefaultSettings()
+		return library.DefaultSettings()
 	}
 	return a.store.GetSettings()
 }
 
 // SaveSettings persists updated application preferences
-func (a *App) SaveSettings(settings models.AppSettings) error {
+func (a *App) SaveSettings(settings library.AppSettings) error {
 	if a.store == nil {
 		return fmt.Errorf("store not initialized")
 	}
 	return a.store.SaveSettings(settings)
 }
 
-// ScanFiles scans all configured folders recursively and returns all media files
-func (a *App) ScanFiles() ([]models.MediaFile, error) {
-	if a.scanner == nil || a.store == nil {
-		return nil, fmt.Errorf("scanner not initialized")
+// ScanFiles scans all configured folders recursively and includes saved YouTube videos
+func (a *App) ScanFiles() ([]media.MediaItem, error) {
+	if a.mediaSvc == nil {
+		return nil, fmt.Errorf("media service not initialized")
 	}
 
-	settings := a.store.GetSettings()
-	if len(settings.Folders) == 0 {
-		return []models.MediaFile{}, nil
-	}
-
-	files, err := a.scanner.ScanFolders(settings.Folders, func(p models.ScanProgress) {
+	files, err := a.mediaSvc.ScanFiles(func(p library.ScanProgress) {
 		wailsRuntime.EventsEmit(a.ctx, "scan:progress", p)
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Populate Stream URLs
-	if a.streamer != nil {
-		for i := range files {
-			files[i].StreamURL = a.streamer.GetStreamURL(files[i].Path)
-		}
+	// Append saved YouTube items as MediaItem
+	if a.youtubeSvc != nil {
+		ytItems := a.youtubeSvc.GetYouTubeMediaItems()
+		files = append(files, ytItems...)
 	}
 
 	return files, nil
 }
 
+// AddYouTubeVideo adds a YouTube video by URL or Video ID
+func (a *App) AddYouTubeVideo(rawURL string) (*media.MediaItem, error) {
+	if a.youtubeSvc == nil {
+		return nil, fmt.Errorf("youtube service not initialized")
+	}
+	return a.youtubeSvc.AddYouTubeVideo(rawURL)
+}
+
+// GetYouTubeVideos returns all saved YouTube items
+func (a *App) GetYouTubeVideos() []media.MediaItem {
+	if a.youtubeSvc == nil {
+		return []media.MediaItem{}
+	}
+	return a.youtubeSvc.GetYouTubeMediaItems()
+}
+
+// RemoveYouTubeVideo removes a YouTube video from library
+func (a *App) RemoveYouTubeVideo(videoID string) error {
+	if a.youtubeSvc == nil {
+		return fmt.Errorf("youtube service not initialized")
+	}
+	return a.youtubeSvc.RemoveYouTubeVideo(videoID)
+}
+
 // SavePlaybackProgress saves playback position, completion status, and A-B loop points
 func (a *App) SavePlaybackProgress(fingerprint string, path string, position float64, duration float64, loopA float64, loopB float64) error {
-	if a.store == nil || fingerprint == "" {
+	if a.playbackSvc == nil {
 		return nil
 	}
-
-	completed := false
-	if duration > 0 && position >= (duration*0.95) {
-		completed = true
-	}
-
-	state := models.PlaybackState{
-		Fingerprint:  fingerprint,
-		LastPath:     path,
-		LastPosition: position,
-		Duration:     duration,
-		Completed:    completed,
-		LoopA:        loopA,
-		LoopB:        loopB,
-	}
-
-	return a.store.SavePlaybackState(state)
+	return a.playbackSvc.SavePlaybackProgress(fingerprint, path, position, duration, loopA, loopB)
 }
 
 // ClearPlaybackProgress removes playback progress for a fingerprint
 func (a *App) ClearPlaybackProgress(fingerprint string) error {
-	if a.store == nil || fingerprint == "" {
+	if a.playbackSvc == nil {
 		return nil
 	}
-	return a.store.DeletePlaybackState(fingerprint)
+	return a.playbackSvc.ClearPlaybackProgress(fingerprint)
 }
 
 // ClearAllPlaybackProgress removes all playback progress
 func (a *App) ClearAllPlaybackProgress() error {
-	if a.store == nil {
+	if a.playbackSvc == nil {
 		return nil
 	}
-	return a.store.ClearAllPlaybackStates()
+	return a.playbackSvc.ClearAllPlaybackProgress()
 }
 
 // GetStreamURL returns the streamable HTTP URL for a specific file
@@ -229,9 +192,13 @@ func (a *App) GetStreamURL(filePath string) string {
 	return a.streamer.GetStreamURL(filePath)
 }
 
-// OpenFileInExplorer reveals the file in Windows Explorer
+// OpenFileInExplorer reveals the file in Windows Explorer or opens URL in default browser
 func (a *App) OpenFileInExplorer(filePath string) error {
 	if runtime.GOOS == "windows" {
+		if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+			cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", filePath)
+			return cmd.Start()
+		}
 		cmd := exec.Command("explorer.exe", "/select,", filepath.Clean(filePath))
 		return cmd.Start()
 	}
