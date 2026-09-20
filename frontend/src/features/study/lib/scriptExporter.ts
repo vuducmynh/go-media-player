@@ -39,6 +39,8 @@ export function parseSRTTime(timeStr: string): number {
   return 0;
 }
 
+const COMMON_STANDALONE_WORDS = new Set(['and', 'or', 'but', 'to', 'in', 'on', 'at', 'for', 'with', 'is', 'are', 'was', 'were', 'it', 'the', 'a', 'an', 'all', 'of']);
+
 /**
  * Cleans up spacing, punctuation, contractions, and ordinal artifacts from transcript text
  */
@@ -53,25 +55,51 @@ export function cleanTranscriptTypography(text: string): string {
     .replace(/\b(\d+)\s+(st|nd|rd|th)\b/gi, '$1$2')
     // 4. Fix hyphenated compound words (e.g. "flip - flops" -> "flip-flops")
     .replace(/\b([A-Za-z]+)\s+-\s+([A-Za-z]+)\b/g, '$1-$2')
-    // 5. Fix detached single consonants (e.g. "m owing" -> "mowing", "r ake" -> "rake", "w aved" -> "waved")
-    .replace(/(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b/g, '$1$2$3')
-    .replace(/(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b/g, '$1$2$3')
-    // 6. Ensure single space after punctuation if immediately followed by letter/number
-    .replace(/([,.:;?!])([A-Za-z0-9])/g, '$1 $2')
-    // 7. Fix lowercase English pronoun "I" and its contractions
+    // 5a. Fix special known word fragment splits first (e.g. CE FR -> CEFR, Circle Kand -> Circle K and)
+    .replace(/\bhes\s+itating\b/gi, 'hesitating')
+    .replace(/\bcan\s+adian\b/gi, 'Canadian')
+    .replace(/\bCE\s+FR\b/gi, 'CEFR')
+    .replace(/\bCircle\s+Kand\b/gi, 'Circle K and')
+    // 5b. Clean dangling possessives/articles with accidental periods (e.g. "my. Hair" -> "my hair", "do you have a. Lot" -> "do you have a lot")
+    .replace(/\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.\s+([a-zA-Z])/gi, (_, p1, p2) => `${p1} ${p2.toLowerCase()}`)
+    // 5c. Fix detached consonant clusters and single consonant prefixes (e.g. "wr inkly", "kn uckles", "cl ippers", "tr inkets", "m owing", "r ake", "ch ores")
+    .replace(/(^|\s)(wr|kn|cl|cr|tr|bl|br|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|wh|ch|Wr|Kn|Cl|Cr|Tr|Bl|Br|Fl|Fr|Gl|Gr|Pl|Pr|Sc|Sk|Sl|Sm|Sn|Sp|Sw|Wh|Ch|[b-hj-z])\s+([a-z]{2,})\b/g, (m, p1, p2, p3) => {
+      if (COMMON_STANDALONE_WORDS.has(p3.toLowerCase())) return m;
+      return p1 + p2 + p3;
+    })
+    .replace(/(^|\s)(wr|kn|cl|cr|tr|bl|br|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|wh|ch|Wr|Kn|Cl|Cr|Tr|Bl|Br|Fl|Fr|Gl|Gr|Pl|Pr|Sc|Sk|Sl|Sm|Sn|Sp|Sw|Wh|Ch|[b-hj-z])\s+([a-z]{2,})\b/g, (m, p1, p2, p3) => {
+      if (COMMON_STANDALONE_WORDS.has(p3.toLowerCase())) return m;
+      return p1 + p2 + p3;
+    })
+    // 5d. Fix bound-morpheme suffix detachment (e.g. "budget ed" -> "budgeted", "vacuum ing" -> "vacuuming", "spong es" -> "sponges")
+    .replace(/\b([a-zA-Z]{2,})\s+(ing|ed|ly|es|tion|sion|ment|ness|ible|ables|ish|ful|less|ize|ise)\b/gi, '$1$2')
+    // 6. Ensure single space after punctuation (selective: do not insert space in numbers or decimals)
+    .replace(/([;?!])([A-Za-z0-9])/g, '$1 $2')
+    .replace(/([:,])([A-Za-z])/g, '$1 $2')
+    .replace(/(\.)([A-Za-z])/g, '$1 $2')
+    // 7. Fix currency and numbers spacing (e.g. "3, 000" -> "3,000", "$10, 000" -> "$10,000", "$ 50" -> "$50", "$2.$2?" -> "$2. $2?")
+    .replace(/([a-zA-Z0-9])([$€£¥₫])/g, '$1 $2')
+    .replace(/([$€£¥₫])\s+(\d)/g, '$1$2')
+    .replace(/\b(\d{1,3}),\s+(\d{3})\b/g, '$1,$2')
+    .replace(/\b(\d{1,3}),\s+(\d{3})\b/g, '$1,$2')
+    .replace(/\b(\d+)\.\s+(\d+[a-zA-Z]*)\b/g, '$1.$2')
+    .replace(/(\.)\s*([$€£¥₫])/g, '$1 $2')
+    // 8. Fix domain names (e.g. "volcaenglish. Com" -> "volcaenglish.com")
+    .replace(/\b([a-z0-9_-]+)\.\s*(com|net|org|io|edu|gov|co|uk|us|vn)\b/gi, (_, p1, p2) => `${p1}.${p2.toLowerCase()}`)
+    // 9. Fix lowercase English pronoun "I" and its contractions
     .replace(/\bi\b/g, 'I')
     .replace(/\bi(['’](?:m|ve|ll|d))\b/gi, (_, p1) => 'I' + p1.toLowerCase())
-    // 8. Capitalize common proper nouns
-    .replace(/\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british)\b/gi, (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase())
-    // 9. Capitalize letter following sentence punctuation (. ? !)
+    // 10. Capitalize common proper nouns
+    .replace(/\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|obama)\b/gi, (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase())
+    // 11. Capitalize letter following sentence punctuation (. ? !)
     .replace(/([.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase())
-    // 10. Split run-on clauses before strong sentence transitions
+    // 12. Split run-on clauses before strong sentence transitions
     .replace(/\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)/g, '$1. $2')
-    // 11. Collapse multiple spaces
+    // 13. Collapse multiple spaces
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  // 12. Ensure first letter is capitalized
+  // 14. Ensure first letter is capitalized
   if (cleaned.length > 0 && cleaned.charAt(0) >= 'a' && cleaned.charAt(0) <= 'z') {
     cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }

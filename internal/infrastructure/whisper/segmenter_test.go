@@ -307,6 +307,30 @@ func TestCleanTranscriptText(t *testing.T) {
 			"It costs $ 500 each .",
 			"It costs $500 each.",
 		},
+		{
+			"My fingers are wr inkly and my kn uckles hurt .",
+			"My fingers are wrinkly and my knuckles hurt.",
+		},
+		{
+			"Use the nail cl ippers for tr inkets .",
+			"Use the nail clippers for trinkets.",
+		},
+		{
+			"Stop hes itating and learn CE FR level English .",
+			"Stop hesitating and learn CEFR level English.",
+		},
+		{
+			"That was so can adian and we budget ed 3, 000 dollars .",
+			"That was so Canadian and we budgeted 3,000 dollars.",
+		},
+		{
+			"We stopped at Circle Kand bought a hat for $2.$2?",
+			"We stopped at Circle K and bought a hat for $2. $2?",
+		},
+		{
+			"I have hair my. Hair is wet and do you have a. Lot of hair",
+			"I have hair my hair is wet and do you have a lot of hair",
+		},
 	}
 
 	for _, tt := range tests {

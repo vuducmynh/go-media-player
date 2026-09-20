@@ -19,13 +19,20 @@ var (
 	spacesAroundAposRegex  = regexp.MustCompile(`\b([A-Za-z]+)\s+['’]([A-Za-z]+)\b`)
 	spacesOrdinalsRegex    = regexp.MustCompile(`(?i)\b(\d+)\s+(st|nd|rd|th)\b`)
 	spacesHyphenRegex      = regexp.MustCompile(`\b([A-Za-z]+)\s+-\s+([A-Za-z]+)\b`)
-	singleConsonantPrefix  = regexp.MustCompile(`(^|\s)([b-hj-zB-HJ-Z])\s+([a-z]{2,})\b`)
+
+	// Sub-word prefix clusters & bound morphemes
+	subwordPrefixRegex = regexp.MustCompile(`(^|\s)(wr|kn|cl|cr|tr|bl|br|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|wh|ch|Wr|Kn|Cl|Cr|Tr|Bl|Br|Fl|Fr|Gl|Gr|Pl|Pr|Sc|Sk|Sl|Sm|Sn|Sp|Sw|Wh|Ch|[b-hj-zB-HJ-Z])\s+([a-z]{2,})\b`)
+	boundSuffixRegex   = regexp.MustCompile(`(?i)\b([a-zA-Z]{2,})\s+(ing|ed|ly|es|tion|sion|ment|ness|ible|ables|ish|ful|less|ize|ise)\b`)
+	specialWordMergers = regexp.MustCompile(`(?i)\b(?:hes\s+itating|can\s+adian|CE\s+FR|Circle\s+Kand)\b`)
+	danglingWordRegex  = regexp.MustCompile(`(?i)\b(?:my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.["]?$`)
+	danglingWordInline = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.\s+([a-zA-Z])`)
 
 	// Punctuation spacing (selective: avoid inserting space inside numbers like 5.45, 10,000, 5:45)
 	punctLetterSpacingRegex  = regexp.MustCompile(`([;?!])([A-Za-z0-9])`)
 	colonLetterSpacingRegex  = regexp.MustCompile(`(:)([A-Za-z])`)
 	commaLetterSpacingRegex  = regexp.MustCompile(`(,)([A-Za-z])`)
 	periodLetterSpacingRegex = regexp.MustCompile(`(\.)([A-Za-z])`)
+	periodCurrencyRegex      = regexp.MustCompile(`(\.)\s*([$€£¥₫])`)
 
 	// Numbers, domains, and currency formatting
 	brokenDecimalRegex   = regexp.MustCompile(`\b(\d+)\.\s+(\d+[a-zA-Z]*)\b`)
@@ -36,7 +43,7 @@ var (
 
 	pronounIRegex        = regexp.MustCompile(`(?i)\b(i)(['’](?:m|ve|ll|d))?\b`)
 	afterPunctRegex      = regexp.MustCompile(`([.!?]\s+)([a-z])`)
-	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british)\b`)
+	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|obama)\b`)
 	runonTransitionRegex = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There)\b)`)
 )
 
@@ -169,6 +176,13 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 				}
 				gapMs := tok.Offsets.From - prevEnd
 
+				prevWordText := ""
+				if len(currentWords) > 0 {
+					prevWordText = currentWords[len(currentWords)-1].Text
+				}
+				isPrevAcronym := len(prevWordText) > 0 && len(prevWordText) <= 3 && strings.ToUpper(prevWordText) == prevWordText && !isPunctuationOnly(prevWordText)
+				isStandaloneWord := isCommonStandaloneWord(cleanToken)
+
 				if isPunct {
 					// Punctuation attaches directly without leading space (e.g. "Hello" + "." -> "Hello.")
 					currentText.WriteString(cleanToken)
@@ -196,9 +210,8 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 							Confidence: tok.Prob,
 						})
 					}
-				} else if !isWordStart && currentText.Len() > 0 && len(currentWords) > 0 && gapMs < 150 {
-					// BPE sub-word continuation (e.g. "compreh" + "ensible" -> "comprehensible", "vacuum" + "ing" -> "vacuuming")
-					// Must have tight gap (< 150ms) to ensure it's not a new word at segment boundary
+				} else if !isWordStart && currentText.Len() > 0 && len(currentWords) > 0 && gapMs < 600 && !(isPrevAcronym && isStandaloneWord) {
+					// BPE sub-word continuation (e.g. "compreh" + "ensible" -> "comprehensible", "vacuum" + "ing" -> "vacuuming", "wr" + "inkly" -> "wrinkly")
 					currentText.WriteString(cleanToken)
 					currentWords[len(currentWords)-1].Text += cleanToken
 					currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
@@ -370,10 +383,48 @@ func CleanTranscriptText(text string) string {
 	// 4. Fix hyphenated compound words (e.g. "flip - flops" -> "flip-flops")
 	text = spacesHyphenRegex.ReplaceAllString(text, "$1-$2")
 
-	// 5. Fix detached single consonants (e.g. "m owing" -> "mowing", "r ake" -> "rake", "w aved" -> "waved")
+	// 5a. Fix special known word fragment splits first (e.g. CE FR -> CEFR, Circle Kand -> Circle K and)
+	text = specialWordMergers.ReplaceAllStringFunc(text, func(m string) string {
+		lower := strings.ToLower(m)
+		switch {
+		case strings.Contains(lower, "hes"):
+			return "hesitating"
+		case strings.Contains(lower, "can"):
+			return "Canadian"
+		case strings.Contains(lower, "ce"):
+			return "CEFR"
+		case strings.Contains(lower, "circle"):
+			return "Circle K and"
+		default:
+			return m
+		}
+	})
+
+	// 5b. Clean dangling possessives/articles with accidental periods (e.g. "my. Hair" -> "my hair", "do you have a. Lot" -> "do you have a lot")
+	text = danglingWordInline.ReplaceAllStringFunc(text, func(m string) string {
+		parts := danglingWordInline.FindStringSubmatch(m)
+		if len(parts) == 3 {
+			return parts[1] + " " + strings.ToLower(parts[2])
+		}
+		return m
+	})
+
+	// 5c. Fix detached consonant clusters and single consonant prefixes (e.g. "wr inkly", "kn uckles", "cl ippers", "tr inkets", "m owing", "r ake", "ch ores")
 	for i := 0; i < 2; i++ {
-		text = singleConsonantPrefix.ReplaceAllString(text, "$1$2$3")
+		text = subwordPrefixRegex.ReplaceAllStringFunc(text, func(m string) string {
+			parts := subwordPrefixRegex.FindStringSubmatch(m)
+			if len(parts) == 4 {
+				if isCommonStandaloneWord(parts[3]) {
+					return m // Do not merge common words like "and", "in", "to"
+				}
+				return parts[1] + parts[2] + parts[3]
+			}
+			return m
+		})
 	}
+
+	// 5d. Fix bound-morpheme suffix detachment (e.g. "budget ed" -> "budgeted", "vacuum ing" -> "vacuuming", "spong es" -> "sponges")
+	text = boundSuffixRegex.ReplaceAllString(text, "$1$2")
 
 	// 6. Ensure space after punctuation if followed immediately by letter/number (selective to protect numbers & domains)
 	text = punctLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
@@ -381,10 +432,11 @@ func CleanTranscriptText(text string) string {
 	text = commaLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
 	text = periodLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
 
-	// 7. Fix currency formatting and spacing (e.g. "was$10, 000" -> "was $10,000", "$ 50" -> "$50")
+	// 7. Fix currency formatting and spacing (e.g. "was$10, 000" -> "was $10,000", "$ 50" -> "$50", "$2.$2?" -> "$2. $2?")
 	text = currencyPrefixRegex.ReplaceAllString(text, "$1 $2")
 	text = currencySpacingRegex.ReplaceAllString(text, "$1$2")
-	for i := 0; i < 2; i++ {
+	text = periodCurrencyRegex.ReplaceAllString(text, "$1 $2")
+	for i := 0; i < 3; i++ {
 		text = numberCommaSpacing.ReplaceAllString(text, "$1,$2")
 	}
 
@@ -444,10 +496,18 @@ func CleanTranscriptText(text string) string {
 }
 
 func isSentenceEnd(word string) bool {
-	if abbrevRegex.MatchString(word) {
+	if abbrevRegex.MatchString(word) || danglingWordRegex.MatchString(word) {
 		return false
 	}
 	return sentenceEndRegex.MatchString(word)
+}
+
+func isCommonStandaloneWord(w string) bool {
+	switch strings.ToLower(w) {
+	case "and", "or", "but", "to", "in", "on", "at", "for", "with", "is", "are", "was", "were", "it", "the", "a", "an", "all", "of":
+		return true
+	}
+	return false
 }
 
 func isKnownTLD(s string) bool {

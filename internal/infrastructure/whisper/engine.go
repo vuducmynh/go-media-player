@@ -224,7 +224,7 @@ func (e *Engine) Transcribe(
 		"-t", strconv.Itoa(threads),
 		"-bs", "1",
 		"-bo", "1",
-		"-mc", "0",
+		"-mc", "64",
 		"-sow",
 		"--prompt", "Hello, welcome back! Today, we're learning English vocabulary, action verbs, and everyday expressions. Let's get started.",
 		"--carry-initial-prompt",

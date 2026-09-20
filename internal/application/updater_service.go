@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	CurrentAppVersion = "v1.3.8"
+	CurrentAppVersion = "v1.3.9"
 	GitHubRepo        = "vuducmynh/go-media-player"
 	GitHubLatestAPI   = "https://api.github.com/repos/vuducmynh/go-media-player/releases/latest"
 )

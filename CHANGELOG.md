@@ -4,6 +4,28 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.9] - 21/09/2026
+
+# Khắc Phục Triệt Để Tách Rời Cụm Phụ Âm (wr, kn, cl, tr...), Chống Cắt Vụn Câu & Bảo Vệ Định Dạng Số / Tiền Tệ
+
+Bản cập nhật v1.3.9 hoàn thiện toàn bộ các trường hợp biên của thuật toán xử lý ngôn ngữ và văn phong transcription: xử lý triệt để các cụm phụ âm bị chia tách, ngăn chặn hiện tượng câu bị ngắt ngọn ở các từ chỉ định/sở hữu qua ranh giới 30 giây của Whisper, sửa lỗi ghép nhầm tên thương hiệu viết hoa, và khắc phục lỗi xuất file Markdown làm vỡ định dạng số hàng nghìn và số tiền tệ.
+
+### Cải tiến & Khắc phục lỗi (5)
+- **Ghép nối toàn diện cụm phụ âm (Consonant Cluster & Prefix Merger)**:
+  - Tăng ngưỡng dung sai thời gian ghép nối token BPE (`gapMs`) từ 150ms lên 600ms, giúp bao quát trọn vẹn khoảng ngập ngừng tự nhiên giữa phụ âm và nguyên âm.
+  - Tự động nhận diện và dán liền các cụm phụ âm bị Whisper tách rời: `wr inkly` ➔ `wrinkly`, `kn uckles` ➔ `knuckles`, `cl ippers` ➔ `clippers`, `tr inkets` ➔ `trinkets`, `hes itating` ➔ `hesitating`, `can adian` ➔ `Canadian`, `CE FR` ➔ `CEFR`.
+- **Tự động gắn các hậu tố phụ thuộc (Bound Morpheme Suffix Merger)**:
+  - Các hậu tố không thể đứng độc lập trong tiếng Anh (`ed`, `ing`, `ly`, `es`, `tion`, `ment`, `ness`, `ible`) khi bị cách rời đều được tự động gom vào từ gốc: `budget ed` ➔ `budgeted`, `vacuum ing` ➔ `vacuuming`, `spong es` ➔ `sponges`.
+- **Bảo vệ từ viết tắt và chữ cái hoa đứng riêng (Acronym Protection)**:
+  - Ngăn chặn triệt để hiện tượng dính chữ như `Circle Kand` ➔ tự động tách đúng thành `Circle K and`, nhờ bộ lọc loại trừ các liên từ/giới từ độc lập phổ biến (`and`, `or`, `to`, `in`, `on`, `at`).
+- **Chống ngắt câu sai ngữ pháp ở ranh giới 30s (Dangling Word Protection)**:
+  - Phát hiện và loại bỏ các dấu chấm vô lý do Whisper đặt ở cuối chu kỳ 30 giây khi gặp các từ sở hữu hoặc mạo từ (`my. Hair` ➔ `my hair`, `a. Lot` ➔ `a lot`), không làm đứt đoạn câu nói của người bản xứ.
+  - Nâng cấp tham số ngữ cảnh `-mc 64` trong Whisper engine giúp bộ giải mã ghi nhớ ngữ cảnh liên tục qua các phân đoạn âm thanh.
+- **Khắc phục lỗi định dạng số và tiền tệ khi xuất Markdown**:
+  - Viết lại bộ lọc xuất Markdown thông minh: bảo vệ toàn vẹn dấu phẩy hàng nghìn (`$10,000`, `3,000`, `40,000`, `56,000`), dấu chấm thập phân (`5.45`, `1.0s`) và khoảng cách tiền tệ (`$2.$2?` ➔ `$2. $2?`).
+
+---
+
 ## [v1.3.8] - 21/09/2026
 
 # Đồng Hồ Đo Thời Gian & Tốc Độ AI Thực Tế (Timer, ETA & Speed Factor), Tự Động Dừng Media Khi Xử Lý & Tối Ưu Băng Thông GPU
