@@ -6,8 +6,10 @@ import { PlayerView } from './widgets/player-viewport';
 import { SettingsModal } from './widgets/settings-modal';
 import { HotkeysGuideModal } from './widgets/hotkeys-modal';
 import { AddYouTubeModal } from './features/youtube-loader';
+import { useUpdater, InstallUpdateModal } from './features/updater';
 
 export const App: React.FC = () => {
+  const updater = useUpdater();
   const [settings, setSettings] = useState<AppSettings>({
     folders: [],
     activeFolder: '',
@@ -428,6 +430,7 @@ export const App: React.FC = () => {
         onOpenFileFolder={handleOpenFileFolder}
         onClearFileProgress={handleClearFileProgress}
         onClearAllProgress={handleClearAllProgress}
+        updater={updater}
       />
 
       {/* Main Player View (with connected hotkeys & YouTube deep listening controls) */}
@@ -457,12 +460,26 @@ export const App: React.FC = () => {
         onSave={handleSaveSettings}
         onAddFolder={handleAddFolder}
         onRemoveFolder={handleRemoveFolder}
+        currentVersion={updater.currentVersion}
+        onCheckUpdate={() => updater.checkForUpdates(false)}
       />
 
       <HotkeysGuideModal
         isOpen={isHotkeysOpen}
         onClose={() => setIsHotkeysOpen(false)}
         settings={settings}
+      />
+
+      {/* Install Update Modal (Freezes App when installing) */}
+      <InstallUpdateModal
+        isOpen={updater.isInstallModalOpen}
+        onClose={updater.closeInstallModal}
+        currentVersion={updater.currentVersion}
+        updateInfo={updater.updateInfo}
+        status={updater.status}
+        errorMessage={updater.errorMessage}
+        onApplyUpdate={updater.applyUpdate}
+        onRestartApp={updater.restartApp}
       />
     </div>
   );

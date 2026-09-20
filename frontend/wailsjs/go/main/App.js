@@ -10,8 +10,16 @@ export function AddYouTubeVideo(arg1) {
   return window['go']['main']['App']['AddYouTubeVideo'](arg1);
 }
 
+export function ApplyUpdate() {
+  return window['go']['main']['App']['ApplyUpdate']();
+}
+
 export function CancelLessonProcessing(arg1) {
   return window['go']['main']['App']['CancelLessonProcessing'](arg1);
+}
+
+export function CheckUpdate() {
+  return window['go']['main']['App']['CheckUpdate']();
 }
 
 export function ClearAllPlaybackProgress() {
@@ -34,8 +42,16 @@ export function DownloadModel(arg1) {
   return window['go']['main']['App']['DownloadModel'](arg1);
 }
 
+export function DownloadUpdate(arg1) {
+  return window['go']['main']['App']['DownloadUpdate'](arg1);
+}
+
 export function ExportBackupData() {
   return window['go']['main']['App']['ExportBackupData']();
+}
+
+export function GetAppVersion() {
+  return window['go']['main']['App']['GetAppVersion']();
 }
 
 export function GetGPUInfo() {
@@ -96,6 +112,10 @@ export function RemoveFolder(arg1) {
 
 export function RemoveYouTubeVideo(arg1) {
   return window['go']['main']['App']['RemoveYouTubeVideo'](arg1);
+}
+
+export function RestartApp() {
+  return window['go']['main']['App']['RestartApp']();
 }
 
 export function SaveDictationAttempt(arg1, arg2, arg3) {

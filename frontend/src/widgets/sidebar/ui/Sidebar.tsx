@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { MediaFile, FilterCategory, ScanProgress, AppSettings, SortOption } from '../../../entities/media/types';
 import { formatTime, formatFileSize, formatDate } from '../../../shared/lib/formatters';
+import { UpdateBadge } from '../../../features/updater';
+import { useUpdater } from '../../../features/updater';
 
 interface SidebarProps {
   files: MediaFile[];
@@ -46,6 +48,7 @@ interface SidebarProps {
   onOpenFileFolder: (path: string) => void;
   onClearFileProgress?: (fingerprint: string) => void;
   onClearAllProgress?: () => void;
+  updater?: ReturnType<typeof useUpdater>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -70,6 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenFileFolder,
   onClearFileProgress,
   onClearAllProgress,
+  updater,
 }) => {
   const [isFolderPickerExpanded, setIsFolderPickerExpanded] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -797,9 +801,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Footer Status */}
-      <div className="p-2.5 border-t border-white/5 bg-fluent-bg-darker text-[10px] text-fluent-text-muted flex items-center justify-between">
-        <span>{currentFolderFiles.length} mục trong danh sách</span>
-        <span className="text-fluent-accent/70">Smart Fingerprint</span>
+      <div className="p-2.5 px-3 border-t border-white/5 bg-fluent-bg-darker text-[10px] text-fluent-text-muted flex items-center justify-between">
+        {updater ? (
+          <UpdateBadge
+            currentVersion={updater.currentVersion}
+            status={updater.status}
+            updateInfo={updater.updateInfo}
+            downloadPercent={updater.downloadPercent}
+            justCheckedUpToDate={updater.justCheckedUpToDate}
+            onCheckUpdate={() => updater.checkForUpdates(false)}
+            onStartDownload={updater.startDownload}
+            onOpenInstallModal={updater.openInstallModal}
+          />
+        ) : (
+          <span className="text-[10px] text-neutral-500 font-mono">v1.0.0</span>
+        )}
+        <span className="text-neutral-500 font-mono">{currentFolderFiles.length} mục</span>
       </div>
     </aside>
   );

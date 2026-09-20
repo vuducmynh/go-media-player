@@ -83,6 +83,11 @@ declare global {
           SelectModelFile: () => Promise<string>;
           ExportBackupData: () => Promise<string>;
           ImportBackupData: () => Promise<number>;
+          GetAppVersion: () => Promise<string>;
+          CheckUpdate: () => Promise<UpdateInfo>;
+          DownloadUpdate: (assetUrl: string) => Promise<void>;
+          ApplyUpdate: () => Promise<void>;
+          RestartApp: () => Promise<void>;
         };
       };
     };
@@ -92,6 +97,22 @@ declare global {
       EventsOnce: (eventName: string, callback: (data: any) => void) => void;
     };
   }
+}
+
+export interface UpdateInfo {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  releaseNotes: string;
+  assetUrl: string;
+  assetSize: number;
+  publishedAt: string;
+}
+
+export interface UpdateDownloadProgress {
+  percent: number;
+  downloadedBytes: number;
+  totalBytes: number;
 }
 
 export const WailsBridge = {
@@ -387,7 +408,50 @@ export const WailsBridge = {
     throw new Error('ImportBackupData not available');
   },
 
+  async getAppVersion(): Promise<string> {
+    if (window.go?.main?.App?.GetAppVersion) {
+      return await window.go.main.App.GetAppVersion();
+    }
+    return 'v1.0.0';
+  },
+
+  async checkUpdate(): Promise<UpdateInfo | null> {
+    if (window.go?.main?.App?.CheckUpdate) {
+      return await window.go.main.App.CheckUpdate();
+    }
+    return null;
+  },
+
+  async downloadUpdate(assetUrl: string): Promise<boolean> {
+    if (window.go?.main?.App?.DownloadUpdate) {
+      await window.go.main.App.DownloadUpdate(assetUrl);
+      return true;
+    }
+    return false;
+  },
+
+  async applyUpdate(): Promise<boolean> {
+    if (window.go?.main?.App?.ApplyUpdate) {
+      await window.go.main.App.ApplyUpdate();
+      return true;
+    }
+    return false;
+  },
+
+  async restartApp(): Promise<void> {
+    if (window.go?.main?.App?.RestartApp) {
+      await window.go.main.App.RestartApp();
+    }
+  },
+
   // Event Listeners
+  onUpdateDownloadProgress(callback: (progress: UpdateDownloadProgress) => void): () => void {
+    if (window.runtime?.EventsOn) {
+      return window.runtime.EventsOn('update:download-progress', callback);
+    }
+    return () => {};
+  },
+
   onGPUDownloadProgress(callback: (progress: ModelDownloadProgress) => void): () => void {
     if (window.runtime?.EventsOn) {
       return window.runtime.EventsOn('gpu:download:progress', callback);

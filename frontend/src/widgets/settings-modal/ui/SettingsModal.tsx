@@ -11,6 +11,7 @@ import {
   FastForward,
   BookmarkCheck,
   HelpCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { AppSettings } from '../../../entities/media/types';
 
@@ -21,6 +22,8 @@ interface SettingsModalProps {
   onSave: (settings: AppSettings) => void;
   onAddFolder: () => void;
   onRemoveFolder: (folder: string) => void;
+  currentVersion?: string;
+  onCheckUpdate?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -30,6 +33,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSave,
   onAddFolder,
   onRemoveFolder,
+  currentVersion,
+  onCheckUpdate,
 }) => {
   const [formData, setFormData] = useState<AppSettings>({ ...settings });
 
@@ -319,6 +324,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ))
               )}
             </div>
+          </div>
+
+          {/* Section 5: App Version & Updates */}
+          <div className="bg-fluent-bg-card p-4 rounded-xl border border-white/5 flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-bold text-fluent-text-secondary uppercase tracking-wider">
+                5. Phiên bản ứng dụng
+              </h3>
+              <p className="text-[11px] text-fluent-text-muted mt-0.5">
+                Go Audio & Video Player (Windows 11) •{' '}
+                <span className="text-emerald-400 font-mono font-semibold">
+                  {currentVersion || 'v1.0.0'}
+                </span>
+              </p>
+            </div>
+            {onCheckUpdate && (
+              <button
+                type="button"
+                onClick={onCheckUpdate}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/10 text-xs font-medium transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Kiểm tra cập nhật</span>
+              </button>
+            )}
           </div>
         </div>
 

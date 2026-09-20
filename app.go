@@ -30,6 +30,7 @@ type App struct {
 	playbackSvc  *application.PlaybackService
 	youtubeSvc   *application.YouTubeService
 	studySvc     *application.StudyService
+	updaterSvc   *application.UpdaterService
 }
 
 // NewApp creates a new App application struct
@@ -72,6 +73,9 @@ func (a *App) startup(ctx context.Context) {
 		fmt.Printf("Error initializing whisper engine: %v\n", err)
 	}
 	a.studySvc = application.NewStudyService(lessonStore, modelMgr, whisperEng)
+
+	a.updaterSvc = application.NewUpdaterService()
+	a.updaterSvc.CleanupOldVersion()
 }
 
 // shutdown is called when the app terminates
@@ -425,4 +429,45 @@ func (a *App) ImportBackupData() (int, error) {
 	return a.studySvc.ImportBackup(srcPath)
 }
 
+// GetAppVersion returns the current application version
+func (a *App) GetAppVersion() string {
+	if a.updaterSvc == nil {
+		return application.CurrentAppVersion
+	}
+	return a.updaterSvc.GetCurrentVersion()
+}
 
+// CheckUpdate checks GitHub Releases for a newer version
+func (a *App) CheckUpdate() (*application.UpdateInfo, error) {
+	if a.updaterSvc == nil {
+		return nil, fmt.Errorf("updater service not initialized")
+	}
+	return a.updaterSvc.CheckUpdate(a.ctx)
+}
+
+// DownloadUpdate downloads the update executable from assetURL and emits progress events
+func (a *App) DownloadUpdate(assetURL string) error {
+	if a.updaterSvc == nil {
+		return fmt.Errorf("updater service not initialized")
+	}
+
+	return a.updaterSvc.DownloadUpdate(a.ctx, assetURL, func(p application.DownloadProgress) {
+		wailsRuntime.EventsEmit(a.ctx, "update:download-progress", p)
+	})
+}
+
+// ApplyUpdate replaces the current executable with the downloaded one
+func (a *App) ApplyUpdate() error {
+	if a.updaterSvc == nil {
+		return fmt.Errorf("updater service not initialized")
+	}
+	return a.updaterSvc.ApplyUpdate()
+}
+
+// RestartApp launches the new executable and terminates the current process
+func (a *App) RestartApp() error {
+	if a.updaterSvc == nil {
+		return fmt.Errorf("updater service not initialized")
+	}
+	return a.updaterSvc.RestartApp()
+}
