@@ -1,7 +1,9 @@
 package application
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"go-audio-play/internal/domain/media"
@@ -16,6 +18,8 @@ type StudyService struct {
 	modelManager  *whisper.ModelManager
 	whisperEngine *whisper.Engine
 	ytCaptions    *youtube.CaptionsExtractor
+	mu            sync.Mutex
+	activeCancels map[string]context.CancelFunc
 }
 
 func NewStudyService(
@@ -28,6 +32,7 @@ func NewStudyService(
 		modelManager:  modelManager,
 		whisperEngine: whisperEngine,
 		ytCaptions:    youtube.NewCaptionsExtractor(),
+		activeCancels: make(map[string]context.CancelFunc),
 	}
 }
 
@@ -46,20 +51,48 @@ func (s *StudyService) DownloadModel(modelID string, onProgress func(study.Model
 	return s.modelManager.DownloadModel(modelID, onProgress)
 }
 
+// CancelLessonProcessing cancels any active transcription process for the given fingerprint
+func (s *StudyService) CancelLessonProcessing(fingerprint string) bool {
+	s.mu.Lock()
+	cancel, ok := s.activeCancels[fingerprint]
+	s.mu.Unlock()
+
+	if ok && cancel != nil {
+		cancel()
+		return true
+	}
+	return false
+}
+
 // CreateLessonFromLocalMedia transcribes and segments a local audio/video file using offline whisper.cpp
 func (s *StudyService) CreateLessonFromLocalMedia(
 	fingerprint string,
 	title string,
 	audioPath string,
 	modelID string,
-	onProgress func(percent int),
+	onProgress func(study.TranscribeProgress),
 ) (*study.Lesson, error) {
 	if modelID == "" {
 		modelID = "large-v3-turbo-q5_0"
 	}
 
-	sentences, err := s.whisperEngine.Transcribe(audioPath, modelID, onProgress)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.mu.Lock()
+	s.activeCancels[fingerprint] = cancel
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.activeCancels, fingerprint)
+		s.mu.Unlock()
+		cancel()
+	}()
+
+	sentences, err := s.whisperEngine.Transcribe(ctx, audioPath, modelID, onProgress)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("transcription cancelled by user")
+		}
 		return nil, fmt.Errorf("transcribe local media failed: %w", err)
 	}
 

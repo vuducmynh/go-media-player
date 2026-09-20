@@ -88,3 +88,12 @@ export interface ModelDownloadProgress {
 }
 
 export type SentenceFilterMode = 'all' | 'starred' | 'under90';
+
+export interface TranscribeProgress {
+  fingerprint?: string;
+  percentage: number;
+  status: string;
+  latestSentence?: string;
+  sentenceCount?: number;
+  recentSentences?: string[];
+}

@@ -3,6 +3,7 @@ package whisper
 import (
 	"archive/zip"
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,7 +21,10 @@ import (
 	"go-audio-play/internal/domain/study"
 )
 
-var progressRegex = regexp.MustCompile(`progress\s*=\s*(\d+)%`)
+var (
+	progressRegex = regexp.MustCompile(`progress\s*=\s*(\d+)%`)
+	sentenceRegex = regexp.MustCompile(`\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*(.+)`)
+)
 
 type Engine struct {
 	mu           sync.Mutex
@@ -122,20 +127,31 @@ func (e *Engine) EnsureCLI() error {
 }
 
 // ConvertTo16kHzWav converts any audio or video container to 16kHz 16-bit mono WAV using ffmpeg
-func (e *Engine) ConvertTo16kHzWav(inputPath string) (string, error) {
+func (e *Engine) ConvertTo16kHzWav(ctx context.Context, inputPath string) (string, error) {
 	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("gap_whisper_%d.wav", time.Now().UnixNano()))
 
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", tempWav)
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inputPath, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", tempWav)
+	setHideWindow(cmd)
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			_ = os.Remove(tempWav)
+			return "", ctx.Err()
+		}
 		return "", fmt.Errorf("ffmpeg conversion failed: %w, log: %s", err, string(output))
 	}
 
 	return tempWav, nil
 }
 
-// Transcribe executes whisper-cli on the audio file and segments sentences
-func (e *Engine) Transcribe(audioPath string, modelID string, onProgress func(percent int)) ([]study.Sentence, error) {
+// Transcribe executes whisper-cli on the audio file and segments sentences with cancellation and live sentence streaming
+func (e *Engine) Transcribe(
+	ctx context.Context,
+	audioPath string,
+	modelID string,
+	onProgress func(p study.TranscribeProgress),
+) ([]study.Sentence, error) {
 	if err := e.EnsureCLI(); err != nil {
 		return nil, fmt.Errorf("whisper engine binary not available: %w", err)
 	}
@@ -145,21 +161,36 @@ func (e *Engine) Transcribe(audioPath string, modelID string, onProgress func(pe
 		return nil, fmt.Errorf("model not available: %w", err)
 	}
 
+	if onProgress != nil {
+		onProgress(study.TranscribeProgress{
+			Percentage: 3,
+			Status:     "Đang chuẩn bị và tối ưu hóa tệp âm thanh...",
+		})
+	}
+
 	// Ensure 16kHz WAV for optimal recognition
 	wavPath := audioPath
 	needsCleanup := false
 	ext := strings.ToLower(filepath.Ext(audioPath))
 	if ext != ".wav" {
-		converted, err := e.ConvertTo16kHzWav(audioPath)
-		if err == nil {
-			wavPath = converted
-			needsCleanup = true
-			defer func() {
-				if needsCleanup {
-					_ = os.Remove(wavPath)
-				}
-			}()
+		converted, err := e.ConvertTo16kHzWav(ctx, audioPath)
+		if err != nil {
+			return nil, err
 		}
+		wavPath = converted
+		needsCleanup = true
+		defer func() {
+			if needsCleanup {
+				_ = os.Remove(wavPath)
+			}
+		}()
+	}
+
+	if onProgress != nil {
+		onProgress(study.TranscribeProgress{
+			Percentage: 8,
+			Status:     "Đang nạp mô hình AI vào bộ nhớ RAM...",
+		})
 	}
 
 	// Prepare temporary output path for whisper JSON output
@@ -169,13 +200,24 @@ func (e *Engine) Transcribe(audioPath string, modelID string, onProgress func(pe
 		_ = os.Remove(jsonFile)
 	}()
 
-	// Construct whisper-cli command
+	// Determine optimal thread count for user's CPU (clamped between 2 and 8)
+	threads := runtime.NumCPU()
+	if threads > 8 {
+		threads = 8
+	} else if threads < 2 {
+		threads = 2
+	}
+
+	// Construct whisper-cli command:
 	// -m: model path
 	// -f: input file
 	// -l: language (en)
 	// -ojf: output full json with token timestamps
 	// -of: output file basename
 	// -pp: print progress
+	// -t: threads
+	// -bs 1 -bo 1: greedy decoding (3x-5x faster on CPU than beam search, prevents freezing)
+	// -fa: flash attention
 	args := []string{
 		"-m", modelPath,
 		"-f", wavPath,
@@ -183,33 +225,138 @@ func (e *Engine) Transcribe(audioPath string, modelID string, onProgress func(pe
 		"-ojf",
 		"-of", outBase,
 		"-pp",
-		"-t", "4",
+		"-t", strconv.Itoa(threads),
+		"-bs", "1",
+		"-bo", "1",
+		"-fa",
 	}
 
-	cmd := exec.Command(e.cliPath, args...)
+	cmd := exec.CommandContext(ctx, e.cliPath, args...)
+	setHideWindow(cmd)
 
-	// Read progress from stderr/stdout
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("open stderr pipe failed: %w", err)
-	}
+	// Combine stdout and stderr into a single pipe to prevent buffer deadlocks
+	pr, pw := io.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
 
 	if err := cmd.Start(); err != nil {
+		_ = pr.Close()
+		_ = pw.Close()
 		return nil, fmt.Errorf("start whisper-cli failed: %w", err)
 	}
 
-	scanner := bufio.NewScanner(stderr)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if match := progressRegex.FindStringSubmatch(line); len(match) > 1 {
-			if p, err := strconv.Atoi(match[1]); err == nil && onProgress != nil {
-				onProgress(p)
+	var (
+		sentenceCount   int
+		recentSentences []string
+		latestSentence  string
+		currentRawProg  int
+	)
+
+	// Custom split function for scanner that splits on BOTH '\n' and '\r'
+	splitOnNewlineOrCR := func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		for i, b := range data {
+			if b == '\n' || b == '\r' {
+				return i + 1, data[:i], nil
 			}
 		}
+		if atEOF {
+			return len(data), data, nil
+		}
+		return 0, nil, nil
 	}
 
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("whisper-cli execution failed: %w", err)
+	// Read lines concurrently
+	scanDone := make(chan struct{})
+	go func() {
+		defer close(scanDone)
+		scanner := bufio.NewScanner(pr)
+		scanner.Split(splitOnNewlineOrCR)
+
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+
+			// 1. Check progress regex: progress = X%
+			if match := progressRegex.FindStringSubmatch(line); len(match) > 1 {
+				if p, err := strconv.Atoi(match[1]); err == nil {
+					currentRawProg = p
+					scaledPercent := 10 + int(float64(p)*0.82)
+					if scaledPercent > 92 {
+						scaledPercent = 92
+					}
+					if onProgress != nil {
+						status := fmt.Sprintf("Đang nhận diện giọng nói... (%d%%)", p)
+						if sentenceCount > 0 {
+							status = fmt.Sprintf("Đang nhận diện giọng nói... (%d%% - Đã xong %d câu)", p, sentenceCount)
+						}
+						onProgress(study.TranscribeProgress{
+							Percentage:      scaledPercent,
+							Status:          status,
+							LatestSentence:  latestSentence,
+							SentenceCount:   sentenceCount,
+							RecentSentences: recentSentences,
+						})
+					}
+				}
+			}
+
+			// 2. Check live recognized sentence: [00:00:00.000 --> 00:00:02.500] Text
+			if match := sentenceRegex.FindStringSubmatch(line); len(match) > 1 {
+				rawText := strings.TrimSpace(match[1])
+				if rawText != "" && !strings.HasPrefix(rawText, "[_") {
+					sentenceCount++
+					latestSentence = rawText
+					item := fmt.Sprintf("%d. %s", sentenceCount, rawText)
+					recentSentences = append(recentSentences, item)
+					if len(recentSentences) > 8 {
+						recentSentences = recentSentences[len(recentSentences)-8:]
+					}
+
+					if onProgress != nil {
+						scaledPercent := 10 + int(float64(currentRawProg)*0.82)
+						if scaledPercent < 12 {
+							scaledPercent = 12
+						}
+						status := fmt.Sprintf("Đang nhận diện: Câu %d", sentenceCount)
+						onProgress(study.TranscribeProgress{
+							Percentage:      scaledPercent,
+							Status:          status,
+							LatestSentence:  latestSentence,
+							SentenceCount:   sentenceCount,
+							RecentSentences: recentSentences,
+						})
+					}
+				}
+			}
+		}
+	}()
+
+	waitErr := cmd.Wait()
+	_ = pw.Close()
+	<-scanDone
+	_ = pr.Close()
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if waitErr != nil {
+		return nil, fmt.Errorf("whisper-cli execution failed: %w", waitErr)
+	}
+
+	if onProgress != nil {
+		onProgress(study.TranscribeProgress{
+			Percentage:      95,
+			Status:          "Đang gom nhóm cấu trúc câu học tập...",
+			LatestSentence:  latestSentence,
+			SentenceCount:   sentenceCount,
+			RecentSentences: recentSentences,
+		})
 	}
 
 	// Read generated JSON
@@ -225,6 +372,16 @@ func (e *Engine) Transcribe(audioPath string, modelID string, onProgress func(pe
 
 	// Process segments into learning sentences
 	sentences := e.segmenter.ProcessSegments(whisperOutput.Transcription)
+
+	if onProgress != nil {
+		onProgress(study.TranscribeProgress{
+			Percentage:      100,
+			Status:          fmt.Sprintf("Hoàn thành! Đã tạo %d câu luyện nghe.", len(sentences)),
+			SentenceCount:   len(sentences),
+			RecentSentences: recentSentences,
+		})
+	}
+
 	return sentences, nil
 }
 

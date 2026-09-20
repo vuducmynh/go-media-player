@@ -98,3 +98,13 @@ type ModelDownloadProgress struct {
 	Status           string  `json:"status"` // "downloading", "verifying", "completed", "error"
 	ErrorMessage     string  `json:"errorMessage,omitempty"`
 }
+
+// TranscribeProgress reports speech recognition percentage and live recognized sentences
+type TranscribeProgress struct {
+	Percentage      int      `json:"percentage"`
+	Status          string   `json:"status"`
+	LatestSentence  string   `json:"latestSentence,omitempty"`
+	SentenceCount   int      `json:"sentenceCount"`
+	RecentSentences []string `json:"recentSentences,omitempty"`
+}
+

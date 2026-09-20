@@ -4,6 +4,7 @@ import {
   ModelInfo,
   ModelDownloadProgress,
   DictationAttempt,
+  TranscribeProgress,
 } from '../../entities/study/types';
 
 declare global {
@@ -68,6 +69,7 @@ declare global {
             sentenceId: string,
             revealed: boolean
           ) => Promise<Lesson | null>;
+          CancelLessonProcessing: (fingerprint: string) => Promise<boolean>;
         };
       };
     };
@@ -286,6 +288,13 @@ export const WailsBridge = {
     return null;
   },
 
+  async cancelLessonProcessing(fingerprint: string): Promise<boolean> {
+    if (window.go?.main?.App?.CancelLessonProcessing) {
+      return await window.go.main.App.CancelLessonProcessing(fingerprint);
+    }
+    return false;
+  },
+
   // Event Listeners
   onScanProgress(callback: (progress: ScanProgress) => void): () => void {
     if (window.runtime?.EventsOn) {
@@ -311,14 +320,17 @@ export const WailsBridge = {
   },
 
   onStudyProcessingProgress(
-    callback: (data: { fingerprint?: string; percentage: number; status?: string }) => void
+    callback: (data: TranscribeProgress) => void
   ): () => void {
     if (window.runtime?.EventsOn) {
       return window.runtime.EventsOn('lesson:transcribe:progress', (data: any) => {
         callback({
           fingerprint: data.fingerprint,
-          percentage: data.percentage || 0,
-          status: data.percentage >= 100 ? 'Hoàn tất phân đoạn câu!' : `Đang phân tích và chia câu (${data.percentage}%)...`,
+          percentage: typeof data.percentage === 'number' ? data.percentage : 0,
+          status: data.status || `Đang xử lý (${data.percentage}%)...`,
+          latestSentence: data.latestSentence || '',
+          sentenceCount: data.sentenceCount || 0,
+          recentSentences: data.recentSentences || [],
         });
       });
     }

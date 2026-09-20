@@ -88,6 +88,8 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const [isProcessingLesson, setIsProcessingLesson] = useState<boolean>(false);
   const [processingPercentage, setProcessingPercentage] = useState<number>(0);
   const [processingStatus, setProcessingStatus] = useState<string>('Đang phân tích âm thanh và phân đoạn câu...');
+  const [processingSentenceCount, setProcessingSentenceCount] = useState<number>(0);
+  const [processingRecentSentences, setProcessingRecentSentences] = useState<string[]>([]);
 
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState<boolean>(false);
   const qualityMenuRef = useRef<HTMLDivElement | null>(null);
@@ -176,6 +178,12 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       if (progress.status) {
         setProcessingStatus(progress.status);
       }
+      if (typeof progress.sentenceCount === 'number') {
+        setProcessingSentenceCount(progress.sentenceCount);
+      }
+      if (progress.recentSentences) {
+        setProcessingRecentSentences(progress.recentSentences);
+      }
     });
     return () => {
       unbind();
@@ -202,11 +210,27 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     }
   };
 
+  const handleCancelLessonProcessing = async () => {
+    if (!currentFile) return;
+    try {
+      await WailsBridge.cancelLessonProcessing(currentFile.fingerprint);
+    } catch (e) {
+      console.warn('Cancel error:', e);
+    } finally {
+      setIsProcessingLesson(false);
+      setProcessingPercentage(0);
+      setProcessingSentenceCount(0);
+      setProcessingRecentSentences([]);
+    }
+  };
+
   const handleStartTranscription = async (modelId: string) => {
     if (!currentFile) return;
     setIsModelManagerOpen(false);
     setIsProcessingLesson(true);
     setProcessingPercentage(0);
+    setProcessingSentenceCount(0);
+    setProcessingRecentSentences([]);
     setProcessingStatus('Đang khởi động AI Whisper và phân đoạn câu...');
 
     try {
@@ -1024,6 +1048,9 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         isOpen={isProcessingLesson}
         percentage={processingPercentage}
         statusText={processingStatus}
+        sentenceCount={processingSentenceCount}
+        recentSentences={processingRecentSentences}
+        onCancel={handleCancelLessonProcessing}
       />
     </div>
   );

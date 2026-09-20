@@ -253,12 +253,24 @@ func (a *App) ProcessLesson(fingerprint, title, mediaPath, modelID string) (*stu
 	if a.studySvc == nil {
 		return nil, fmt.Errorf("study service not initialized")
 	}
-	return a.studySvc.CreateLessonFromLocalMedia(fingerprint, title, mediaPath, modelID, func(percent int) {
+	return a.studySvc.CreateLessonFromLocalMedia(fingerprint, title, mediaPath, modelID, func(p study.TranscribeProgress) {
 		wailsRuntime.EventsEmit(a.ctx, "lesson:transcribe:progress", map[string]interface{}{
-			"fingerprint": fingerprint,
-			"percentage":  percent,
+			"fingerprint":     fingerprint,
+			"percentage":      p.Percentage,
+			"status":          p.Status,
+			"latestSentence":  p.LatestSentence,
+			"sentenceCount":   p.SentenceCount,
+			"recentSentences": p.RecentSentences,
 		})
 	})
+}
+
+// CancelLessonProcessing terminates any ongoing transcription process for the given media
+func (a *App) CancelLessonProcessing(fingerprint string) bool {
+	if a.studySvc == nil {
+		return false
+	}
+	return a.studySvc.CancelLessonProcessing(fingerprint)
 }
 
 // ProcessYouTubeLesson extracts captions or transcribes a YouTube video
@@ -268,8 +280,11 @@ func (a *App) ProcessYouTubeLesson(fingerprint, title, videoID, modelID string) 
 	}
 	return a.studySvc.CreateLessonFromYouTube(fingerprint, title, videoID, modelID, func(percent int) {
 		wailsRuntime.EventsEmit(a.ctx, "lesson:transcribe:progress", map[string]interface{}{
-			"fingerprint": fingerprint,
-			"percentage":  percent,
+			"fingerprint":     fingerprint,
+			"percentage":      percent,
+			"status":          "Đang xử lý phụ đề YouTube...",
+			"sentenceCount":   0,
+			"recentSentences": []string{},
 		})
 	})
 }
