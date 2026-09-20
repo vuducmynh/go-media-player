@@ -371,6 +371,26 @@ export function useYouTubePlayer({
   }, [isPlayerReady, isLoopActive, loopA, loopB, duration, availableQualities.length, onTimeUpdate]);
 
   // Player Controls
+  const play = useCallback(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    try {
+      player.playVideo();
+      setIsPlaying(true);
+    } catch (e) {}
+  }, []);
+
+  const pause = useCallback(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    try {
+      player.pauseVideo();
+      setIsPlaying(false);
+    } catch (e) {}
+  }, []);
+
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -486,6 +506,8 @@ export function useYouTubePlayer({
     currentQuality,
     availableQualities,
     togglePlay,
+    play,
+    pause,
     seekTo,
     seekDelta,
     setSpeed,

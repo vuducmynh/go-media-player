@@ -1,4 +1,10 @@
 import { AppSettings, MediaFile, ScanProgress } from '../../entities/media/types';
+import {
+  Lesson,
+  ModelInfo,
+  ModelDownloadProgress,
+  DictationAttempt,
+} from '../../entities/study/types';
 
 declare global {
   interface Window {
@@ -27,6 +33,41 @@ declare global {
           ClearAllPlaybackProgress: () => Promise<void>;
           GetStreamURL: (filePath: string) => Promise<string>;
           OpenFileInExplorer: (filePath: string) => Promise<void>;
+
+          // Study & Whisper Methods
+          GetLesson: (fingerprint: string) => Promise<Lesson | null>;
+          GetInstalledModels: () => Promise<ModelInfo[]>;
+          DownloadModel: (modelId: string) => Promise<void>;
+          ProcessLesson: (
+            fingerprint: string,
+            title: string,
+            mediaPath: string,
+            modelId: string
+          ) => Promise<Lesson | null>;
+          ProcessYouTubeLesson: (
+            fingerprint: string,
+            title: string,
+            videoId: string,
+            modelId: string
+          ) => Promise<Lesson | null>;
+          SaveDictationAttempt: (
+            fingerprint: string,
+            sentenceId: string,
+            attempt: DictationAttempt
+          ) => Promise<Lesson | null>;
+          ToggleSentenceStar: (
+            fingerprint: string,
+            sentenceId: string
+          ) => Promise<Lesson | null>;
+          MarkSentenceDifficult: (
+            fingerprint: string,
+            currentTimestampMs: number
+          ) => Promise<Lesson | null>;
+          UpdateSentenceVisibility: (
+            fingerprint: string,
+            sentenceId: string,
+            revealed: boolean
+          ) => Promise<Lesson | null>;
         };
       };
     };
@@ -161,9 +202,125 @@ export const WailsBridge = {
     }
   },
 
+  // --- Study & Whisper Methods ---
+  async getLesson(fingerprint: string): Promise<Lesson | null> {
+    if (window.go?.main?.App?.GetLesson) {
+      return await window.go.main.App.GetLesson(fingerprint);
+    }
+    return null;
+  },
+
+  async getInstalledModels(): Promise<ModelInfo[]> {
+    if (window.go?.main?.App?.GetInstalledModels) {
+      return await window.go.main.App.GetInstalledModels();
+    }
+    return [];
+  },
+
+  async downloadModel(modelId: string): Promise<void> {
+    if (window.go?.main?.App?.DownloadModel) {
+      await window.go.main.App.DownloadModel(modelId);
+    }
+  },
+
+  async processLesson(
+    fingerprint: string,
+    title: string,
+    mediaPath: string,
+    modelId: string
+  ): Promise<Lesson | null> {
+    if (window.go?.main?.App?.ProcessLesson) {
+      return await window.go.main.App.ProcessLesson(fingerprint, title, mediaPath, modelId);
+    }
+    return null;
+  },
+
+  async processYouTubeLesson(
+    fingerprint: string,
+    title: string,
+    videoId: string,
+    modelId: string
+  ): Promise<Lesson | null> {
+    if (window.go?.main?.App?.ProcessYouTubeLesson) {
+      return await window.go.main.App.ProcessYouTubeLesson(fingerprint, title, videoId, modelId);
+    }
+    return null;
+  },
+
+  async saveDictationAttempt(
+    fingerprint: string,
+    sentenceId: string,
+    attempt: DictationAttempt
+  ): Promise<Lesson | null> {
+    if (window.go?.main?.App?.SaveDictationAttempt) {
+      return await window.go.main.App.SaveDictationAttempt(fingerprint, sentenceId, attempt);
+    }
+    return null;
+  },
+
+  async toggleSentenceStar(fingerprint: string, sentenceId: string): Promise<Lesson | null> {
+    if (window.go?.main?.App?.ToggleSentenceStar) {
+      return await window.go.main.App.ToggleSentenceStar(fingerprint, sentenceId);
+    }
+    return null;
+  },
+
+  async markSentenceDifficult(
+    fingerprint: string,
+    currentTimestampMs: number
+  ): Promise<Lesson | null> {
+    if (window.go?.main?.App?.MarkSentenceDifficult) {
+      return await window.go.main.App.MarkSentenceDifficult(fingerprint, currentTimestampMs);
+    }
+    return null;
+  },
+
+  async updateSentenceVisibility(
+    fingerprint: string,
+    sentenceId: string,
+    revealed: boolean
+  ): Promise<Lesson | null> {
+    if (window.go?.main?.App?.UpdateSentenceVisibility) {
+      return await window.go.main.App.UpdateSentenceVisibility(fingerprint, sentenceId, revealed);
+    }
+    return null;
+  },
+
+  // Event Listeners
   onScanProgress(callback: (progress: ScanProgress) => void): () => void {
     if (window.runtime?.EventsOn) {
       return window.runtime.EventsOn('scan:progress', callback);
+    }
+    return () => {};
+  },
+
+  onModelDownloadProgress(callback: (progress: ModelDownloadProgress) => void): () => void {
+    if (window.runtime?.EventsOn) {
+      return window.runtime.EventsOn('model:download:progress', callback);
+    }
+    return () => {};
+  },
+
+  onLessonTranscribeProgress(
+    callback: (data: { fingerprint: string; percentage: number }) => void
+  ): () => void {
+    if (window.runtime?.EventsOn) {
+      return window.runtime.EventsOn('lesson:transcribe:progress', callback);
+    }
+    return () => {};
+  },
+
+  onStudyProcessingProgress(
+    callback: (data: { fingerprint?: string; percentage: number; status?: string }) => void
+  ): () => void {
+    if (window.runtime?.EventsOn) {
+      return window.runtime.EventsOn('lesson:transcribe:progress', (data: any) => {
+        callback({
+          fingerprint: data.fingerprint,
+          percentage: data.percentage || 0,
+          status: data.percentage >= 100 ? 'Hoàn tất phân đoạn câu!' : `Đang phân tích và chia câu (${data.percentage}%)...`,
+        });
+      });
     }
     return () => {};
   },

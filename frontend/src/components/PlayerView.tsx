@@ -21,6 +21,7 @@ import {
   Sliders,
   ChevronDown,
   Check,
+  Sparkles,
 } from 'lucide-react';
 import { MediaFile, AppSettings } from '../types';
 import { formatTime } from '../utils/formatters';
@@ -28,6 +29,11 @@ import { AudioVisualizer } from './AudioVisualizer';
 import { ListeningControls } from './ListeningControls';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { useYouTubePlayer, getQualityDisplayName } from '../shared/hooks/useYouTubePlayer';
+import { StudyWorkspace } from '../features/study/ui/StudyWorkspace';
+import { ModelManagerModal } from '../features/study/ui/ModelManagerModal';
+import { ProcessingModal } from '../features/study/ui/ProcessingModal';
+import { WailsBridge } from '../shared/api/wailsBridge';
+import { Lesson, DictationAttempt } from '../entities/study/types';
 
 interface PlayerViewProps {
   currentFile: MediaFile | null;
@@ -74,6 +80,14 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const [isHoveringTimeline, setIsHoveringTimeline] = useState<boolean>(false);
   const [hoverTime, setHoverTime] = useState<number>(0);
   const [hoverPositionRatio, setHoverPositionRatio] = useState<number>(0);
+
+  // ListenSlice Study Mode State
+  const [isStudyModeOpen, setIsStudyModeOpen] = useState<boolean>(false);
+  const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
+  const [isModelManagerOpen, setIsModelManagerOpen] = useState<boolean>(false);
+  const [isProcessingLesson, setIsProcessingLesson] = useState<boolean>(false);
+  const [processingPercentage, setProcessingPercentage] = useState<number>(0);
+  const [processingStatus, setProcessingStatus] = useState<string>('Đang phân tích âm thanh và phân đoạn câu...');
 
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState<boolean>(false);
   const qualityMenuRef = useRef<HTMLDivElement | null>(null);
@@ -129,6 +143,9 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
   // When current file changes, restore saved state and A-B loop points
   useEffect(() => {
+    setIsStudyModeOpen(false);
+    setCurrentLesson(null);
+
     if (!currentFile) {
       setIsPlaying(false);
       setCurrentTime(0);
@@ -151,6 +168,170 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       }
     }
   }, [currentFile?.fingerprint, isYouTube]);
+
+  // Listen to study processing progress updates from Wails
+  useEffect(() => {
+    const unbind = WailsBridge.onStudyProcessingProgress((progress) => {
+      setProcessingPercentage(progress.percentage);
+      if (progress.status) {
+        setProcessingStatus(progress.status);
+      }
+    });
+    return () => {
+      unbind();
+    };
+  }, []);
+
+  // Study playback helpers
+  const handleStudyPlay = () => {
+    if (!currentFile) return;
+    if (isYouTube) {
+      ytPlayer.play();
+    } else {
+      mediaRef.current?.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  };
+
+  const handleStudyPause = () => {
+    if (!currentFile) return;
+    if (isYouTube) {
+      ytPlayer.pause();
+    } else {
+      mediaRef.current?.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handleStartTranscription = async (modelId: string) => {
+    if (!currentFile) return;
+    setIsModelManagerOpen(false);
+    setIsProcessingLesson(true);
+    setProcessingPercentage(0);
+    setProcessingStatus('Đang khởi động AI Whisper và phân đoạn câu...');
+
+    try {
+      const newLesson = await WailsBridge.processLesson(
+        currentFile.fingerprint,
+        currentFile.title || currentFile.name,
+        currentFile.path,
+        modelId
+      );
+      if (newLesson && newLesson.sentences && newLesson.sentences.length > 0) {
+        setCurrentLesson(newLesson);
+        setIsStudyModeOpen(true);
+      } else {
+        alert('Không tìm thấy câu phân đoạn nào trong audio.');
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi phân đoạn câu bằng Whisper:', err);
+      alert('Lỗi nhận diện âm thanh: ' + (err?.message || err));
+    } finally {
+      setIsProcessingLesson(false);
+    }
+  };
+
+  const handleOpenStudyMode = async () => {
+    if (!currentFile) return;
+
+    // Check if lesson already exists in store
+    try {
+      const existingLesson = await WailsBridge.getLesson(currentFile.fingerprint);
+      if (existingLesson && existingLesson.sentences && existingLesson.sentences.length > 0) {
+        setCurrentLesson(existingLesson);
+        setIsStudyModeOpen(true);
+        return;
+      }
+    } catch (e) {
+      console.warn('Could not fetch existing lesson:', e);
+    }
+
+    // If YouTube video, try fast automatic captions extraction first
+    if (isYouTube) {
+      setIsProcessingLesson(true);
+      setProcessingPercentage(30);
+      setProcessingStatus('Đang lấy phụ đề tự động từ YouTube...');
+
+      try {
+        const videoId = currentFile.youtubeId || currentFile.id || currentFile.path;
+        const ytLesson = await WailsBridge.processYouTubeLesson(
+          currentFile.fingerprint,
+          currentFile.title || currentFile.name,
+          videoId,
+          ''
+        );
+        if (ytLesson && ytLesson.sentences && ytLesson.sentences.length > 0) {
+          setCurrentLesson(ytLesson);
+          setIsStudyModeOpen(true);
+          setIsProcessingLesson(false);
+          return;
+        }
+      } catch (err: any) {
+        console.warn('YouTube caption fetch failed, falling back to offline Whisper:', err);
+      }
+      setIsProcessingLesson(false);
+    }
+
+    // For local files or YouTube without captions: Check if any Whisper model is downloaded
+    try {
+      const models = await WailsBridge.getInstalledModels();
+      const downloadedModel = models.find((m) => m.downloaded);
+      if (downloadedModel) {
+        handleStartTranscription(downloadedModel.id);
+      } else {
+        setIsModelManagerOpen(true);
+      }
+    } catch (e) {
+      setIsModelManagerOpen(true);
+    }
+  };
+
+  const handleSaveAttempt = async (sentenceId: string, attempt: DictationAttempt) => {
+    if (!currentFile) return null;
+    try {
+      const updated = await WailsBridge.saveDictationAttempt(currentFile.fingerprint, sentenceId, attempt);
+      setCurrentLesson(updated);
+      return updated;
+    } catch (e) {
+      console.error('Failed to save dictation attempt:', e);
+      return null;
+    }
+  };
+
+  const handleToggleStar = async (sentenceId: string) => {
+    if (!currentFile) return null;
+    try {
+      const updated = await WailsBridge.toggleSentenceStar(currentFile.fingerprint, sentenceId);
+      setCurrentLesson(updated);
+      return updated;
+    } catch (e) {
+      console.error('Failed to toggle star:', e);
+      return null;
+    }
+  };
+
+  const handleMarkDifficult = async (timestampMs: number) => {
+    if (!currentFile) return null;
+    try {
+      const updated = await WailsBridge.markSentenceDifficult(currentFile.fingerprint, timestampMs);
+      setCurrentLesson(updated);
+      return updated;
+    } catch (e) {
+      console.error('Failed to mark difficult:', e);
+      return null;
+    }
+  };
+
+  const handleUpdateSentenceVisibility = async (sentenceId: string, revealed: boolean) => {
+    if (!currentFile) return null;
+    try {
+      const updated = await WailsBridge.updateSentenceVisibility(currentFile.fingerprint, sentenceId, revealed);
+      setCurrentLesson(updated);
+      return updated;
+    } catch (e) {
+      console.error('Failed to update sentence visibility:', e);
+      return null;
+    }
+  };
 
   // Handle Hold-to-slow effect for local media (YouTube handled internally in useYouTubePlayer)
   useEffect(() => {
@@ -747,6 +928,16 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
           {/* Right: Volume & Utility Actions */}
           <div className="flex items-center gap-3">
+            {/* Luyện sâu (ListenSlice) Action Button */}
+            <button
+              onClick={handleOpenStudyMode}
+              title="Luyện nghe sâu theo câu (ListenSlice: Listen / Dictation / Shadow / Review)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-fluent-accent/20 to-purple-500/20 hover:from-fluent-accent/30 hover:to-purple-500/30 text-fluent-accent border border-fluent-accent/40 text-xs font-semibold shadow-sm transition-all active:scale-95 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Luyện sâu</span>
+            </button>
+
             {/* Volume Control */}
             <div className="flex items-center gap-2 group">
               <button
@@ -800,6 +991,40 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Intensive Study Mode Overlay (ListenSlice) */}
+      {isStudyModeOpen && currentLesson && (
+        <div className="absolute inset-0 z-40 bg-fluent-bg-darker flex flex-col animate-fade-in">
+          <StudyWorkspace
+            lesson={currentLesson}
+            onClose={() => setIsStudyModeOpen(false)}
+            onSaveAttempt={handleSaveAttempt}
+            onToggleStar={handleToggleStar}
+            onMarkDifficult={handleMarkDifficult}
+            onUpdateSentenceVisibility={handleUpdateSentenceVisibility}
+            onSeek={handleSeekTo}
+            onPlay={handleStudyPlay}
+            onPause={handleStudyPause}
+            onSetSpeed={handleSpeedChange}
+            isPlaying={activeIsPlaying}
+            currentTime={activeCurrentTime}
+          />
+        </div>
+      )}
+
+      {/* Whisper Model Downloader Modal */}
+      <ModelManagerModal
+        isOpen={isModelManagerOpen}
+        onClose={() => setIsModelManagerOpen(false)}
+        onSelectModelAndStart={handleStartTranscription}
+      />
+
+      {/* Sentence Segmentation Progress Modal */}
+      <ProcessingModal
+        isOpen={isProcessingLesson}
+        percentage={processingPercentage}
+        statusText={processingStatus}
+      />
     </div>
   );
 };

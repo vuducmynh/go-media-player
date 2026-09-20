@@ -11,9 +11,11 @@ import (
 	"go-audio-play/internal/application"
 	"go-audio-play/internal/domain/library"
 	"go-audio-play/internal/domain/media"
+	"go-audio-play/internal/domain/study"
 	"go-audio-play/internal/infrastructure/scanner"
 	"go-audio-play/internal/infrastructure/storage"
 	"go-audio-play/internal/infrastructure/streamer"
+	"go-audio-play/internal/infrastructure/whisper"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -26,6 +28,7 @@ type App struct {
 	mediaSvc     *application.MediaService
 	playbackSvc  *application.PlaybackService
 	youtubeSvc   *application.YouTubeService
+	studySvc     *application.StudyService
 }
 
 // NewApp creates a new App application struct
@@ -54,6 +57,20 @@ func (a *App) startup(ctx context.Context) {
 	a.mediaSvc = application.NewMediaService(a.store, scannerSrv, a.streamer)
 	a.playbackSvc = application.NewPlaybackService(a.store)
 	a.youtubeSvc = application.NewYouTubeService(a.store)
+
+	lessonStore, err := storage.NewLessonStore()
+	if err != nil {
+		fmt.Printf("Error initializing lesson store: %v\n", err)
+	}
+	modelMgr, err := whisper.NewModelManager()
+	if err != nil {
+		fmt.Printf("Error initializing model manager: %v\n", err)
+	}
+	whisperEng, err := whisper.NewEngine(modelMgr)
+	if err != nil {
+		fmt.Printf("Error initializing whisper engine: %v\n", err)
+	}
+	a.studySvc = application.NewStudyService(lessonStore, modelMgr, whisperEng)
 }
 
 // shutdown is called when the app terminates
@@ -204,3 +221,88 @@ func (a *App) OpenFileInExplorer(filePath string) error {
 	}
 	return nil
 }
+
+// GetLesson retrieves a study lesson by its media fingerprint
+func (a *App) GetLesson(fingerprint string) (*study.Lesson, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.GetLesson(fingerprint)
+}
+
+// GetInstalledModels returns the list of downloadable speech recognition models
+func (a *App) GetInstalledModels() []study.ModelInfo {
+	if a.studySvc == nil {
+		return []study.ModelInfo{}
+	}
+	return a.studySvc.GetInstalledModels()
+}
+
+// DownloadModel initiates a model download and emits progress events
+func (a *App) DownloadModel(modelID string) error {
+	if a.studySvc == nil {
+		return fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.DownloadModel(modelID, func(p study.ModelDownloadProgress) {
+		wailsRuntime.EventsEmit(a.ctx, "model:download:progress", p)
+	})
+}
+
+// ProcessLesson generates sentence segmentation for a local file using whisper.cpp
+func (a *App) ProcessLesson(fingerprint, title, mediaPath, modelID string) (*study.Lesson, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.CreateLessonFromLocalMedia(fingerprint, title, mediaPath, modelID, func(percent int) {
+		wailsRuntime.EventsEmit(a.ctx, "lesson:transcribe:progress", map[string]interface{}{
+			"fingerprint": fingerprint,
+			"percentage":  percent,
+		})
+	})
+}
+
+// ProcessYouTubeLesson extracts captions or transcribes a YouTube video
+func (a *App) ProcessYouTubeLesson(fingerprint, title, videoID, modelID string) (*study.Lesson, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.CreateLessonFromYouTube(fingerprint, title, videoID, modelID, func(percent int) {
+		wailsRuntime.EventsEmit(a.ctx, "lesson:transcribe:progress", map[string]interface{}{
+			"fingerprint": fingerprint,
+			"percentage":  percent,
+		})
+	})
+}
+
+// SaveDictationAttempt records a user's dictation submission
+func (a *App) SaveDictationAttempt(fingerprint, sentenceID string, attempt study.DictationAttempt) (*study.Lesson, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.SaveDictationAttempt(fingerprint, sentenceID, attempt)
+}
+
+// ToggleSentenceStar toggles the star mark on a sentence
+func (a *App) ToggleSentenceStar(fingerprint, sentenceID string) (*study.Lesson, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.ToggleSentenceStar(fingerprint, sentenceID)
+}
+
+// MarkSentenceDifficult flags the sentence matching current audio playback timestamp
+func (a *App) MarkSentenceDifficult(fingerprint string, currentTimestampMs int64) (*study.Lesson, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.MarkSentenceDifficult(fingerprint, currentTimestampMs)
+}
+
+// UpdateSentenceVisibility records whether transcript was revealed before answering
+func (a *App) UpdateSentenceVisibility(fingerprint, sentenceID string, revealed bool) (*study.Lesson, error) {
+	if a.studySvc == nil {
+		return nil, fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.UpdateSentenceVisibility(fingerprint, sentenceID, revealed)
+}
+
