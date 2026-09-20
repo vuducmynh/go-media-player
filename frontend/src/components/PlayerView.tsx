@@ -422,81 +422,52 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     >
       {/* Video Viewport / Audio Visualizer Area */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-        {/* YouTube Viewport Container */}
+        {/* YouTube Viewport Container: always visible and fully interactive when isYouTube is true */}
         <div
           ref={ytContainerRef}
           className={`w-full h-full ${isYouTube ? 'flex items-center justify-center' : 'hidden'}`}
         />
 
-        {/* YouTube Loading Overlay */}
-        {isYouTube && ytPlayer.isLoading && !ytPlayer.error && (
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center z-10 p-6 animate-fade-in text-center select-none">
-            {currentFile.thumbnail && (
-              <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-                <img
-                  src={currentFile.thumbnail}
-                  alt=""
-                  className="w-full h-full object-cover scale-110 blur-xl"
-                />
-              </div>
-            )}
-            <div className="relative z-10 flex flex-col items-center">
-              <div className="w-16 h-16 rounded-2xl bg-red-600/20 border border-red-500/30 flex items-center justify-center mb-4 shadow-xl">
-                <Youtube className="w-8 h-8 text-red-500 animate-pulse" />
-              </div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-                <h3 className="text-sm font-bold text-white tracking-wide">
-                  Đang tải Video YouTube...
-                </h3>
-              </div>
-              <p className="text-xs text-fluent-text-secondary max-w-sm truncate">
-                {currentFile.title || currentFile.name}
-              </p>
-              <span className="mt-3 px-2.5 py-1 rounded-full bg-white/10 text-[10px] text-fluent-text-muted font-mono">
-                Ưu tiên chất lượng cao nhất (1080p HD)
-              </span>
-            </div>
+        {/* YouTube Loading Indicator (Non-blocking pill in top-left) */}
+        {isYouTube && ytPlayer.isLoading && (
+          <div className="absolute top-4 left-4 z-20 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/80 backdrop-blur-md border border-white/10 text-white text-xs shadow-lg animate-fade-in">
+            <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+            <span>Đang tải video YouTube...</span>
           </div>
         )}
 
-        {/* YouTube Buffering Overlay (Subtle badge, non-blocking) */}
-        {isYouTube && ytPlayer.isBuffering && !ytPlayer.isLoading && !ytPlayer.error && (
-          <div className="absolute top-4 right-4 z-20 px-3 py-1.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/10 flex items-center gap-2 shadow-fluent animate-fade-in pointer-events-none">
+        {/* YouTube Buffering Indicator (Non-blocking pill in top-right) */}
+        {isYouTube && ytPlayer.isBuffering && !ytPlayer.isLoading && (
+          <div className="absolute top-4 right-4 z-20 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/80 backdrop-blur-md border border-white/10 text-white text-xs shadow-lg animate-fade-in">
             <div className="w-3.5 h-3.5 border-2 border-fluent-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs text-white font-medium">Đang nạp đệm...</span>
+            <span>Đang nạp đệm...</span>
           </div>
         )}
 
-        {/* YouTube Error Overlay */}
+        {/* YouTube Error Notification Banner (Bottom floating alert, does not cover entire screen) */}
         {isYouTube && ytPlayer.error && (
-          <div className="absolute inset-0 bg-fluent-bg-darker/95 backdrop-blur-md flex flex-col items-center justify-center z-20 p-6 animate-fade-in text-center select-none">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-xl">
-              <AlertTriangle className="w-8 h-8" />
+          <div className="absolute bottom-4 left-4 right-4 z-30 flex items-center justify-between gap-3 p-3 rounded-xl bg-red-950/90 backdrop-blur-md border border-red-500/40 text-white shadow-2xl animate-fade-in">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+              <div className="truncate text-xs">
+                <p className="font-semibold text-red-200 truncate">{ytPlayer.error.message}</p>
+                {ytPlayer.error.isEmbedBlocked && (
+                  <p className="text-[11px] text-red-300/80">Bạn có thể bấm nút bên phải để mở xem trực tiếp trên YouTube.</p>
+                )}
+              </div>
             </div>
-            <h3 className="text-base font-bold text-white mb-1">
-              {ytPlayer.error.isEmbedBlocked ? 'Video bị giới hạn nhúng phát' : 'Không thể phát video YouTube'}
-            </h3>
-            <p className="text-xs text-fluent-text-secondary max-w-md mb-2">
-              {ytPlayer.error.message}
-            </p>
-            {ytPlayer.error.isEmbedBlocked && (
-              <p className="text-[11px] text-amber-300/80 max-w-sm mb-5 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
-                Chủ sở hữu video này đã tắt quyền nhúng ngoài web YouTube. Bạn có thể bấm nút bên dưới để mở nghe trực tiếp.
-              </p>
-            )}
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={ytPlayer.retry}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-semibold transition-all border border-white/10"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-xs text-white transition-all"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Thử tải lại
+                <RefreshCw className="w-3 h-3" /> Thử lại
               </button>
               <button
                 onClick={() => onOpenFileFolder(currentFile.path)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white text-xs font-semibold transition-all shadow-lg shadow-red-600/30"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 active:scale-95 text-xs text-white font-medium transition-all shadow-lg shadow-red-600/30"
               >
-                <ExternalLink className="w-3.5 h-3.5" /> Mở xem trên YouTube
+                <ExternalLink className="w-3 h-3" /> Mở trên YouTube
               </button>
             </div>
           </div>
@@ -660,9 +631,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                       ? '720p HD'
                       : ytPlayer.currentQuality === 'highres'
                       ? 'Gốc HD'
-                      : ytPlayer.currentQuality
-                      ? `${ytPlayer.currentQuality}`
-                      : '1080p HD'}
+                      : ytPlayer.currentQuality || '1080p HD'}
                   </span>
                 )}
               </div>
