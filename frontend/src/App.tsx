@@ -212,6 +212,50 @@ export const App: React.FC = () => {
     }
   };
 
+  // Handle renaming file directly in filesystem or YouTube title
+  const handleRenameFile = async (file: MediaFile, newName: string) => {
+    const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
+    if (isYt) {
+      await WailsBridge.renameYouTubeVideo(file.youtubeId || file.id, newName);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === file.id || f.youtubeId === file.youtubeId
+            ? { ...f, title: newName }
+            : f
+        )
+      );
+      if (currentFile && (currentFile.id === file.id || currentFile.youtubeId === file.youtubeId)) {
+        setCurrentFile((prev) => (prev ? { ...prev, title: newName } : null));
+      }
+    } else {
+      const updatedMedia = await WailsBridge.renameMediaFile(file.path, newName);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.fingerprint === file.fingerprint || f.path === file.path
+            ? {
+                ...f,
+                name: updatedMedia.name,
+                path: updatedMedia.path,
+                streamUrl: updatedMedia.streamUrl,
+              }
+            : f
+        )
+      );
+      if (currentFile && (currentFile.fingerprint === file.fingerprint || currentFile.path === file.path)) {
+        setCurrentFile((prev) =>
+          prev
+            ? {
+                ...prev,
+                name: updatedMedia.name,
+                path: updatedMedia.path,
+                streamUrl: updatedMedia.streamUrl,
+              }
+            : null
+        );
+      }
+    }
+  };
+
   // Select file to play
   const handleSelectFile = (file: MediaFile) => {
     setCurrentFile(file);
@@ -422,6 +466,7 @@ export const App: React.FC = () => {
         onSelectFolder={handleSelectFolder}
         onOpenAddYouTube={() => setIsAddYouTubeOpen(true)}
         onRemoveYouTubeVideo={handleRemoveYouTubeVideo}
+        onRenameFile={handleRenameFile}
         onRescan={handleRescan}
         onFilterChange={setActiveFilter}
         onSearchChange={setSearchQuery}

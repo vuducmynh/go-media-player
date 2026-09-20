@@ -114,6 +114,14 @@ export function RemoveYouTubeVideo(arg1) {
   return window['go']['main']['App']['RemoveYouTubeVideo'](arg1);
 }
 
+export function RenameMediaFile(arg1, arg2) {
+  return window['go']['main']['App']['RenameMediaFile'](arg1, arg2);
+}
+
+export function RenameYouTubeVideo(arg1, arg2) {
+  return window['go']['main']['App']['RenameYouTubeVideo'](arg1, arg2);
+}
+
 export function RestartApp() {
   return window['go']['main']['App']['RestartApp']();
 }

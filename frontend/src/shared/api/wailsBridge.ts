@@ -36,10 +36,11 @@ declare global {
           ClearAllPlaybackProgress: () => Promise<void>;
           GetStreamURL: (filePath: string) => Promise<string>;
           OpenFileInExplorer: (filePath: string) => Promise<void>;
-          OpenInExplorer: (filePath: string) => Promise<void>;
           GetYouTubeVideos: () => Promise<MediaFile[]>;
           AddYouTubeVideo: (url: string) => Promise<MediaFile | null>;
           RemoveYouTubeVideo: (videoId: string) => Promise<void>;
+          RenameMediaFile: (oldPath: string, newName: string) => Promise<MediaFile>;
+          RenameYouTubeVideo: (videoId: string, newTitle: string) => Promise<void>;
           GetInstalledModels: () => Promise<ModelInfo[]>;
           DownloadModel: (modelId: string) => Promise<void>;
           GetLesson: (fingerprint: string) => Promise<Lesson | null>;
@@ -235,6 +236,19 @@ export const WailsBridge = {
   async openFileInExplorer(filePath: string): Promise<void> {
     if (window.go?.main?.App?.OpenFileInExplorer) {
       await window.go.main.App.OpenFileInExplorer(filePath);
+    }
+  },
+
+  async renameMediaFile(oldPath: string, newName: string): Promise<MediaFile> {
+    if (window.go?.main?.App?.RenameMediaFile) {
+      return await window.go.main.App.RenameMediaFile(oldPath, newName);
+    }
+    throw new Error('RenameMediaFile IPC method not available');
+  },
+
+  async renameYouTubeVideo(videoId: string, newTitle: string): Promise<void> {
+    if (window.go?.main?.App?.RenameYouTubeVideo) {
+      await window.go.main.App.RenameYouTubeVideo(videoId, newTitle);
     }
   },
 

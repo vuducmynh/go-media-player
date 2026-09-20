@@ -20,6 +20,7 @@ import {
   Youtube,
   ArrowUpDown,
   Check,
+  Pencil,
 } from 'lucide-react';
 import { MediaFile, FilterCategory, ScanProgress, AppSettings, SortOption } from '../../../entities/media/types';
 import { formatTime, formatFileSize, formatDate } from '../../../shared/lib/formatters';
@@ -40,6 +41,7 @@ interface SidebarProps {
   onSelectFolder: (folder: string) => void;
   onOpenAddYouTube: () => void;
   onRemoveYouTubeVideo?: (videoId: string) => void;
+  onRenameFile?: (file: MediaFile, newName: string) => Promise<void>;
   onRescan: () => void;
   onFilterChange: (filter: FilterCategory) => void;
   onSearchChange: (query: string) => void;
@@ -65,6 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectFolder,
   onOpenAddYouTube,
   onRemoveYouTubeVideo,
+  onRenameFile,
   onRescan,
   onFilterChange,
   onSearchChange,
@@ -78,6 +81,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isFolderPickerExpanded, setIsFolderPickerExpanded] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+
+  // Inline rename state
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState<boolean>(false);
+
+  const handleStartRename = (file: MediaFile, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingFileId(file.fingerprint + file.path);
+    const isYt = file.source === 'youtube' || Boolean(file.youtubeId);
+    if (isYt) {
+      setEditingName(file.title || file.name);
+    } else {
+      const lastDot = file.name.lastIndexOf('.');
+      const baseName = lastDot > 0 ? file.name.substring(0, lastDot) : file.name;
+      setEditingName(baseName);
+    }
+    setRenameError(null);
+  };
+
+  const handleCancelRename = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingFileId(null);
+    setEditingName('');
+    setRenameError(null);
+  };
+
+  const handleConfirmRename = async (file: MediaFile, e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      setRenameError('Tên không được để trống');
+      return;
+    }
+    if (onRenameFile) {
+      setIsRenaming(true);
+      try {
+        await onRenameFile(file, trimmed);
+        setEditingFileId(null);
+        setEditingName('');
+        setRenameError(null);
+      } catch (err: any) {
+        setRenameError(err.message || 'Không thể đổi tên tệp');
+      } finally {
+        setIsRenaming(false);
+      }
+    }
+  };
 
   // Total YouTube files across library
   const youtubeFiles = useMemo(() => {
@@ -693,64 +748,134 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 {/* File Details */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <p
-                      className={`text-xs font-medium truncate ${
-                        isSelected
-                          ? isYt
-                            ? 'text-red-400 font-semibold'
-                            : 'text-fluent-accent font-semibold'
-                          : 'text-white'
-                      }`}
+                  {editingFileId === file.fingerprint + file.path ? (
+                    <div
+                      className="py-0.5 space-y-1"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {file.title || file.name}
-                    </p>
-
-                    {/* Right action group: Clear button and status/duration */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {/* Delete YouTube item button */}
-                      {isYt && onRemoveYouTubeVideo && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1 flex items-center">
+                          <input
+                            type="text"
+                            value={editingName}
+                            onChange={(e) => {
+                              setEditingName(e.target.value);
+                              if (renameError) setRenameError(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleConfirmRename(file, e);
+                              } else if (e.key === 'Escape') {
+                                handleCancelRename(e as any);
+                              }
+                            }}
+                            autoFocus
+                            disabled={isRenaming}
+                            className="w-full pl-2 pr-12 py-1 text-xs bg-black/80 border border-fluent-accent rounded-lg text-white font-medium focus:outline-none focus:ring-1 focus:ring-fluent-accent"
+                            placeholder="Nhập tên mới..."
+                          />
+                          {!isYt && (
+                            <span className="absolute right-2 text-[10px] font-mono text-fluent-text-muted select-none pointer-events-none">
+                              {file.name.substring(file.name.lastIndexOf('.'))}
+                            </span>
+                          )}
+                        </div>
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRemoveYouTubeVideo(file.youtubeId || file.id);
-                          }}
-                          title="Xóa video YouTube khỏi danh sách"
-                          className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
+                          onClick={(e) => handleConfirmRename(file, e)}
+                          disabled={isRenaming || !editingName.trim()}
+                          className="p-1 rounded-md bg-fluent-accent/20 hover:bg-fluent-accent/30 text-fluent-accent disabled:opacity-40 transition-colors shrink-0"
+                          title="Lưu (Enter)"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Check className="w-3.5 h-3.5" />
                         </button>
-                      )}
-
-                      {/* Clear progress button for individual file */}
-                      {!isYt && file.lastPosition > 0 && onClearFileProgress && (
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onClearFileProgress(file.fingerprint);
-                          }}
-                          title="Dọn dẹp: Xóa khỏi danh sách đang nghe (đặt lại tiến trình)"
-                          className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
+                          onClick={(e) => handleCancelRename(e)}
+                          disabled={isRenaming}
+                          className="p-1 rounded-md hover:bg-white/10 text-fluent-text-muted hover:text-white transition-colors shrink-0"
+                          title="Hủy (Escape)"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
-                      )}
-
-                      {file.completed ? (
-                        <span title="Đã hoàn thành">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        </span>
-                      ) : (
-                        file.duration > 0 && (
-                          <span className="text-[10px] text-fluent-text-muted font-mono shrink-0">
-                            {formatTime(file.duration)}
-                          </span>
-                        )
+                      </div>
+                      {renameError && (
+                        <p className="text-[10px] text-rose-400">{renameError}</p>
                       )}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-1">
+                      <p
+                        className={`text-xs font-medium truncate flex-1 ${
+                          isSelected
+                            ? isYt
+                              ? 'text-red-400 font-semibold'
+                              : 'text-fluent-accent font-semibold'
+                            : 'text-white'
+                        }`}
+                        title={file.title || file.name}
+                      >
+                        {file.title || file.name}
+                      </p>
+
+                      {/* Right action group: Rename button, Clear button and status/duration */}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        {/* Rename button (hover or click) */}
+                        {onRenameFile && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartRename(file, e)}
+                            title="Đổi tên tệp"
+                            className="p-1 rounded hover:bg-white/10 text-fluent-text-muted hover:text-fluent-accent transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        {/* Delete YouTube item button */}
+                        {isYt && onRemoveYouTubeVideo && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveYouTubeVideo(file.youtubeId || file.id);
+                            }}
+                            title="Xóa video YouTube khỏi danh sách"
+                            className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        {/* Clear progress button for individual file */}
+                        {!isYt && file.lastPosition > 0 && onClearFileProgress && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onClearFileProgress(file.fingerprint);
+                            }}
+                            title="Dọn dẹp: Xóa khỏi danh sách đang nghe (đặt lại tiến trình)"
+                            className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        {file.completed ? (
+                          <span title="Đã hoàn thành">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          </span>
+                        ) : (
+                          file.duration > 0 && (
+                            <span className="text-[10px] text-fluent-text-muted font-mono shrink-0 ml-1">
+                              {formatTime(file.duration)}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Subfolder relative path / YouTube Channel and last played time */}
                   <div className="flex items-center justify-between text-[10px] text-fluent-text-muted mt-0.5">

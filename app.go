@@ -185,6 +185,22 @@ func (a *App) RemoveYouTubeVideo(videoID string) error {
 	return a.youtubeSvc.RemoveYouTubeVideo(videoID)
 }
 
+// RenameMediaFile renames a local media file directly in the filesystem
+func (a *App) RenameMediaFile(oldPath string, newName string) (*media.MediaItem, error) {
+	if a.mediaSvc == nil {
+		return nil, fmt.Errorf("media service not initialized")
+	}
+	return a.mediaSvc.RenameMediaFile(oldPath, newName)
+}
+
+// RenameYouTubeVideo updates the display title of a saved YouTube item
+func (a *App) RenameYouTubeVideo(videoID string, newTitle string) error {
+	if a.mediaSvc == nil {
+		return fmt.Errorf("media service not initialized")
+	}
+	return a.mediaSvc.RenameYouTubeVideo(videoID, newTitle)
+}
+
 // SavePlaybackProgress saves playback position, completion status, and A-B loop points
 func (a *App) SavePlaybackProgress(fingerprint string, path string, position float64, duration float64, loopA float64, loopB float64) error {
 	if a.playbackSvc == nil {

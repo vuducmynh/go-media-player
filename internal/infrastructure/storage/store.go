@@ -230,3 +230,40 @@ func (s *Store) SetCachedFingerprint(path string, size int64, modTime time.Time,
 	}
 	_ = s.saveLocked()
 }
+
+// UpdateFilePath updates file cache and playback state when a file is renamed
+func (s *Store) UpdateFilePath(oldPath, newPath string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Update FileCache
+	if entry, exists := s.data.FileCache[oldPath]; exists {
+		s.data.FileCache[newPath] = entry
+		delete(s.data.FileCache, oldPath)
+	}
+
+	// Update PlaybackStates matching oldPath
+	for _, state := range s.data.PlaybackStates {
+		if state.LastPath == oldPath {
+			state.LastPath = newPath
+		}
+	}
+
+	return s.saveLocked()
+}
+
+// UpdateYouTubeTitle updates the display title of a saved YouTube item
+func (s *Store) UpdateYouTubeTitle(videoID, newTitle string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, v := range s.data.Settings.YouTubeVideos {
+		if v.VideoID == videoID {
+			s.data.Settings.YouTubeVideos[i].Title = newTitle
+			break
+		}
+	}
+
+	return s.saveLocked()
+}
+

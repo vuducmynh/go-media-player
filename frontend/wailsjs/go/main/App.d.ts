@@ -61,6 +61,10 @@ export function RemoveFolder(arg1:string):Promise<Array<string>>;
 
 export function RemoveYouTubeVideo(arg1:string):Promise<void>;
 
+export function RenameMediaFile(arg1:string,arg2:string):Promise<media.MediaItem>;
+
+export function RenameYouTubeVideo(arg1:string,arg2:string):Promise<void>;
+
 export function RestartApp():Promise<void>;
 
 export function SaveDictationAttempt(arg1:string,arg2:string,arg3:study.DictationAttempt):Promise<study.Lesson>;
