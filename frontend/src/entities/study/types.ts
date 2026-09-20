@@ -97,3 +97,10 @@ export interface TranscribeProgress {
   sentenceCount?: number;
   recentSentences?: string[];
 }
+
+export interface GPUInfo {
+  hasNvidiaGpu: boolean;
+  gpuName: string;
+  gpuEnabled: boolean;
+}
+

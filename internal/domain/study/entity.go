@@ -108,3 +108,11 @@ type TranscribeProgress struct {
 	RecentSentences []string `json:"recentSentences,omitempty"`
 }
 
+// GPUInfo describes the host system's GPU capabilities
+type GPUInfo struct {
+	HasNvidiaGPU bool   `json:"hasNvidiaGpu"`
+	GPUName      string `json:"gpuName"`
+	GPUEnabled   bool   `json:"gpuEnabled"`
+}
+
+

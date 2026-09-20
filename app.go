@@ -248,6 +248,24 @@ func (a *App) DownloadModel(modelID string) error {
 	})
 }
 
+// GetGPUInfo retrieves NVIDIA GPU hardware and acceleration status
+func (a *App) GetGPUInfo() study.GPUInfo {
+	if a.studySvc == nil {
+		return study.GPUInfo{}
+	}
+	return a.studySvc.GetGPUInfo()
+}
+
+// DownloadGPUAcceleration downloads NVIDIA CUDA runtime for ultra-fast GPU transcription
+func (a *App) DownloadGPUAcceleration() error {
+	if a.studySvc == nil {
+		return fmt.Errorf("study service not initialized")
+	}
+	return a.studySvc.DownloadGPUAcceleration(func(p study.ModelDownloadProgress) {
+		wailsRuntime.EventsEmit(a.ctx, "gpu:download:progress", p)
+	})
+}
+
 // ProcessLesson generates sentence segmentation for a local file using whisper.cpp
 func (a *App) ProcessLesson(fingerprint, title, mediaPath, modelID string) (*study.Lesson, error) {
 	if a.studySvc == nil {

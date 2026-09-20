@@ -200,12 +200,17 @@ func (e *Engine) Transcribe(
 		_ = os.Remove(jsonFile)
 	}()
 
-	// Determine optimal thread count for user's CPU (clamped between 2 and 8)
-	threads := runtime.NumCPU()
-	if threads > 8 {
-		threads = 8
-	} else if threads < 2 {
-		threads = 2
+	// Determine optimal processors and threads for user's CPU
+	numCPU := runtime.NumCPU()
+	processors := 1
+	threads := numCPU
+
+	if numCPU >= 8 {
+		processors = 2
+		threads = 4
+	} else if numCPU >= 4 {
+		processors = 1
+		threads = numCPU
 	}
 
 	// Construct whisper-cli command:
@@ -215,7 +220,8 @@ func (e *Engine) Transcribe(
 	// -ojf: output full json with token timestamps
 	// -of: output file basename
 	// -pp: print progress
-	// -t: threads
+	// -p: parallel processors (splits audio into parallel chunks)
+	// -t: threads per processor
 	// -bs 1 -bo 1: greedy decoding (3x-5x faster on CPU than beam search, prevents freezing)
 	// -fa: flash attention
 	args := []string{
@@ -225,6 +231,7 @@ func (e *Engine) Transcribe(
 		"-ojf",
 		"-of", outBase,
 		"-pp",
+		"-p", strconv.Itoa(processors),
 		"-t", strconv.Itoa(threads),
 		"-bs", "1",
 		"-bo", "1",
@@ -425,5 +432,135 @@ func unzip(src, dest string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// GetGPUInfo detects NVIDIA GPU and checks if CUDA acceleration files are present
+func (e *Engine) GetGPUInfo() study.GPUInfo {
+	info := study.GPUInfo{}
+	if runtime.GOOS != "windows" {
+		return info
+	}
+
+	cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader")
+	setHideWindow(cmd)
+	out, err := cmd.Output()
+	if err == nil {
+		name := strings.TrimSpace(string(out))
+		if name != "" {
+			info.HasNvidiaGPU = true
+			info.GPUName = name
+		}
+	}
+
+	// Check if CUDA DLLs or CUDA whisper-cli is installed in binDir
+	cudaDLL := filepath.Join(e.binDir, "ggml-cuda.dll")
+	cublasDLL := filepath.Join(e.binDir, "cublas64_12.dll")
+	if _, err := os.Stat(cudaDLL); err == nil {
+		info.GPUEnabled = true
+	} else if _, err := os.Stat(cublasDLL); err == nil {
+		info.GPUEnabled = true
+	}
+
+	return info
+}
+
+// DownloadGPUAcceleration downloads and extracts whisper-cublas-12.4.0-bin-x64.zip
+func (e *Engine) DownloadGPUAcceleration(onProgress func(study.ModelDownloadProgress)) error {
+	zipURL := "https://github.com/ggml-org/whisper.cpp/releases/download/b5130/whisper-cublas-12.4.0-bin-x64.zip"
+	tempZip := filepath.Join(e.binDir, "whisper-cublas-12.4.0-bin-x64.zip")
+
+	resp, err := http.Get(zipURL)
+	if err != nil {
+		return fmt.Errorf("download GPU package failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status: %s", resp.Status)
+	}
+
+	totalSize := resp.ContentLength
+	out, err := os.Create(tempZip)
+	if err != nil {
+		return fmt.Errorf("create temp file failed: %w", err)
+	}
+	defer out.Close()
+
+	var downloaded int64
+	buf := make([]byte, 128*1024)
+	lastUpdate := time.Now()
+	var lastBytes int64
+
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			_, writeErr := out.Write(buf[:n])
+			if writeErr != nil {
+				return fmt.Errorf("write error: %w", writeErr)
+			}
+			downloaded += int64(n)
+
+			if time.Since(lastUpdate) >= 300*time.Millisecond && onProgress != nil {
+				elapsed := time.Since(lastUpdate).Seconds()
+				speed := int64(float64(downloaded-lastBytes) / elapsed)
+				percent := float64(0)
+				if totalSize > 0 {
+					percent = float64(downloaded) / float64(totalSize) * 100
+				}
+				onProgress(study.ModelDownloadProgress{
+					ModelID:          "gpu-cuda",
+					DownloadedBytes:  downloaded,
+					TotalBytes:       totalSize,
+					Percentage:       percent,
+					SpeedBytesPerSec: speed,
+					Status:           "downloading",
+				})
+				lastUpdate = time.Now()
+				lastBytes = downloaded
+			}
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				break
+			}
+			return fmt.Errorf("download error: %w", readErr)
+		}
+	}
+
+	_ = out.Close()
+
+	if onProgress != nil {
+		onProgress(study.ModelDownloadProgress{
+			ModelID:     "gpu-cuda",
+			Percentage:  100,
+			Status:      "verifying",
+		})
+	}
+
+	// Extract zip into binDir
+	if err := unzip(tempZip, e.binDir); err != nil {
+		_ = os.Remove(tempZip)
+		return fmt.Errorf("extract GPU package failed: %w", err)
+	}
+	_ = os.Remove(tempZip)
+
+	// Clean subfolder if extracted into Release/
+	releaseDir := filepath.Join(e.binDir, "Release")
+	if entries, err := os.ReadDir(releaseDir); err == nil {
+		for _, entry := range entries {
+			_ = os.Rename(filepath.Join(releaseDir, entry.Name()), filepath.Join(e.binDir, entry.Name()))
+		}
+		_ = os.RemoveAll(releaseDir)
+	}
+
+	if onProgress != nil {
+		onProgress(study.ModelDownloadProgress{
+			ModelID:    "gpu-cuda",
+			Percentage: 100,
+			Status:     "completed",
+		})
+	}
+
 	return nil
 }

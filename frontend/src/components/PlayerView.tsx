@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Check,
   Sparkles,
+  Cpu,
 } from 'lucide-react';
 import { MediaFile, AppSettings } from '../types';
 import { formatTime } from '../utils/formatters';
@@ -90,6 +91,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const [processingStatus, setProcessingStatus] = useState<string>('Đang phân tích âm thanh và phân đoạn câu...');
   const [processingSentenceCount, setProcessingSentenceCount] = useState<number>(0);
   const [processingRecentSentences, setProcessingRecentSentences] = useState<string[]>([]);
+  const [activeModelName, setActiveModelName] = useState<string>('');
 
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState<boolean>(false);
   const qualityMenuRef = useRef<HTMLDivElement | null>(null);
@@ -226,6 +228,12 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
   const handleStartTranscription = async (modelId: string) => {
     if (!currentFile) return;
+    const modelFriendlyNames: Record<string, string> = {
+      'large-v3-turbo-q5_0': 'Whisper Large-v3 Turbo Q5 (Khuyên dùng • ~547MB)',
+      'base': 'Whisper Base (Siêu nhẹ & Nhanh • ~142MB)',
+      'large-v3-q5_0': 'Whisper Large-v3 Q5 (Mô hình nặng • ~1.1GB)',
+    };
+    setActiveModelName(modelFriendlyNames[modelId] || modelId);
     setIsModelManagerOpen(false);
     setIsProcessingLesson(true);
     setProcessingPercentage(0);
@@ -247,8 +255,18 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         alert('Không tìm thấy câu phân đoạn nào trong audio.');
       }
     } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      // If user gracefully cancelled, do NOT show an alert dialog!
+      if (
+        msg.toLowerCase().includes('cancelled') ||
+        msg.toLowerCase().includes('canceled') ||
+        msg.toLowerCase().includes('context canceled')
+      ) {
+        console.log('Transcription stopped by user.');
+        return;
+      }
       console.error('Lỗi khi phân đoạn câu bằng Whisper:', err);
-      alert('Lỗi nhận diện âm thanh: ' + (err?.message || err));
+      alert('Lỗi nhận diện âm thanh: ' + msg);
     } finally {
       setIsProcessingLesson(false);
     }
@@ -295,15 +313,37 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
       setIsProcessingLesson(false);
     }
 
-    // For local files or YouTube without captions: Check if any Whisper model is downloaded
+    // For local files or YouTube without captions: Check installed Whisper models
     try {
       const models = await WailsBridge.getInstalledModels();
-      const downloadedModel = models.find((m) => m.downloaded);
-      if (downloadedModel) {
-        handleStartTranscription(downloadedModel.id);
-      } else {
+      const downloadedModels = models.filter((m) => m.downloaded);
+      if (downloadedModels.length === 0) {
         setIsModelManagerOpen(true);
+        return;
       }
+
+      // 1. Check user's preferred model from localStorage
+      const preferred = localStorage.getItem('preferred_whisper_model');
+      if (preferred && downloadedModels.some((m) => m.id === preferred)) {
+        handleStartTranscription(preferred);
+        return;
+      }
+
+      // 2. If exactly one model is downloaded, auto start with it
+      if (downloadedModels.length === 1) {
+        handleStartTranscription(downloadedModels[0].id);
+        return;
+      }
+
+      // 3. If recommended is downloaded, auto start with recommended
+      const recommended = downloadedModels.find((m) => m.recommended);
+      if (recommended) {
+        handleStartTranscription(recommended.id);
+        return;
+      }
+
+      // 4. Otherwise, open model manager so user can pick
+      setIsModelManagerOpen(true);
     } catch (e) {
       setIsModelManagerOpen(true);
     }
@@ -952,15 +992,24 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
           {/* Right: Volume & Utility Actions */}
           <div className="flex items-center gap-3">
-            {/* Luyện sâu (ListenSlice) Action Button */}
-            <button
-              onClick={handleOpenStudyMode}
-              title="Luyện nghe sâu theo câu (ListenSlice: Listen / Dictation / Shadow / Review)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-fluent-accent/20 to-purple-500/20 hover:from-fluent-accent/30 hover:to-purple-500/30 text-fluent-accent border border-fluent-accent/40 text-xs font-semibold shadow-sm transition-all active:scale-95 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Luyện sâu</span>
-            </button>
+            {/* Luyện sâu (ListenSlice) Action Button with Model Config */}
+            <div className="flex items-center">
+              <button
+                onClick={handleOpenStudyMode}
+                title="Luyện nghe sâu theo câu (ListenSlice: Listen / Dictation / Shadow / Review)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-l-xl bg-gradient-to-r from-fluent-accent/20 to-purple-500/20 hover:from-fluent-accent/30 hover:to-purple-500/30 text-fluent-accent border border-fluent-accent/40 text-xs font-semibold shadow-sm transition-all active:scale-95 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Luyện sâu</span>
+              </button>
+              <button
+                onClick={() => setIsModelManagerOpen(true)}
+                title="Quản lý Mô hình AI Whisper & Tăng tốc GPU (NVIDIA CUDA / CPU Đa luồng)"
+                className="p-1.5 rounded-r-xl bg-fluent-accent/10 hover:bg-fluent-accent/25 text-fluent-accent border-y border-r border-fluent-accent/40 text-xs transition-all cursor-pointer"
+              >
+                <Cpu className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
             {/* Volume Control */}
             <div className="flex items-center gap-2 group">
@@ -1050,6 +1099,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
         statusText={processingStatus}
         sentenceCount={processingSentenceCount}
         recentSentences={processingRecentSentences}
+        activeModelName={activeModelName}
         onCancel={handleCancelLessonProcessing}
       />
     </div>

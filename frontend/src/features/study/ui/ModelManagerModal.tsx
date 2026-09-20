@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Cpu, Download, Check, Sparkles, HardDrive, AlertCircle } from 'lucide-react';
-import { ModelInfo, ModelDownloadProgress } from '../../../entities/study/types';
+import { X, Cpu, Download, Check, Sparkles, HardDrive, AlertCircle, Zap, CheckCircle2 } from 'lucide-react';
+import { ModelInfo, ModelDownloadProgress, GPUInfo } from '../../../entities/study/types';
 import { WailsBridge } from '../../../shared/api/wailsBridge';
 
 interface ModelManagerModalProps {
@@ -16,34 +16,46 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
 }) => {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [activeDownload, setActiveDownload] = useState<ModelDownloadProgress | null>(null);
+  const [activeGPUDownload, setActiveGPUDownload] = useState<ModelDownloadProgress | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string>('large-v3-turbo-q5_0');
+  const [gpuInfo, setGpuInfo] = useState<GPUInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadModels = async () => {
+  const loadModelsAndHardware = async () => {
     try {
-      const list = await WailsBridge.getInstalledModels();
+      const [list, gpu] = await Promise.all([
+        WailsBridge.getInstalledModels(),
+        WailsBridge.getGPUInfo(),
+      ]);
       setModels(list);
-      // If a model is already downloaded, default selection to it
-      const downloaded = list.find((m) => m.downloaded);
-      if (downloaded) {
-        setSelectedModelId(downloaded.id);
+      setGpuInfo(gpu);
+
+      // Check user's preferred model from localStorage
+      const savedPreferred = localStorage.getItem('preferred_whisper_model');
+      if (savedPreferred && list.some((m) => m.id === savedPreferred && m.downloaded)) {
+        setSelectedModelId(savedPreferred);
+      } else {
+        const downloaded = list.find((m) => m.downloaded);
+        if (downloaded) {
+          setSelectedModelId(downloaded.id);
+        }
       }
     } catch (e) {
-      console.error('Failed to load models:', e);
+      console.error('Failed to load models or GPU info:', e);
     }
   };
 
   useEffect(() => {
     if (isOpen) {
-      loadModels();
+      loadModelsAndHardware();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    const unbind = WailsBridge.onModelDownloadProgress((p) => {
+    const unbindModel = WailsBridge.onModelDownloadProgress((p) => {
       setActiveDownload(p);
       if (p.status === 'completed') {
-        loadModels();
+        loadModelsAndHardware();
         setActiveDownload(null);
       } else if (p.status === 'error') {
         setError(p.errorMessage || 'Lỗi trong quá trình tải model');
@@ -51,8 +63,20 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
       }
     });
 
+    const unbindGPU = WailsBridge.onGPUDownloadProgress((p) => {
+      setActiveGPUDownload(p);
+      if (p.status === 'completed') {
+        loadModelsAndHardware();
+        setActiveGPUDownload(null);
+      } else if (p.status === 'error') {
+        setError(p.errorMessage || 'Lỗi khi kích hoạt gói GPU CUDA');
+        setActiveGPUDownload(null);
+      }
+    });
+
     return () => {
-      unbind();
+      unbindModel();
+      unbindGPU();
     };
   }, []);
 
@@ -67,7 +91,22 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
     }
   };
 
+  const handleDownloadGPU = async () => {
+    setError(null);
+    try {
+      await WailsBridge.downloadGPUAcceleration();
+    } catch (err: any) {
+      setError(err?.message || 'Không thể bắt đầu tải gói GPU CUDA');
+    }
+  };
+
+  const handleSelectModel = (modelId: string) => {
+    setSelectedModelId(modelId);
+    localStorage.setItem('preferred_whisper_model', modelId);
+  };
+
   const handleStart = () => {
+    localStorage.setItem('preferred_whisper_model', selectedModelId);
     const chosen = models.find((m) => m.id === selectedModelId);
     if (!chosen?.downloaded) {
       handleDownload(selectedModelId);
@@ -87,10 +126,10 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-white tracking-wide">
-                Quản Lý Mô Hình AI Whisper Cục Bộ
+                Quản Lý Mô Hình & Hiệu Suất AI Whisper
               </h2>
               <p className="text-[10px] text-fluent-text-muted">
-                100% Offline & Riêng Tư • Không gửi âm thanh lên máy chủ
+                100% Offline & Riêng Tư • Đa luồng CPU song song & Tăng tốc GPU
               </p>
             </div>
           </div>
@@ -104,11 +143,68 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
 
         {/* Body */}
         <div className="p-5 space-y-4 max-h-[68vh] overflow-y-auto">
-          <p className="text-xs text-fluent-text-secondary leading-relaxed">
-            Hệ thống sử dụng động cơ AI <strong>Whisper.cpp</strong> chạy trực tiếp trên card đồ họa
-            hoặc CPU máy của bạn để nhận diện âm thanh và bóc tách câu với mốc thời gian chuẩn xác
-            từng mili-giây.
-          </p>
+          {/* Hardware & GPU Acceleration Status Banner */}
+          {gpuInfo?.hasNvidiaGpu && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4 fill-current" />
+                </div>
+                <div className="truncate">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-200">
+                      {gpuInfo.gpuName}
+                    </span>
+                    {gpuInfo.gpuEnabled ? (
+                      <span className="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/40 flex items-center gap-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> CUDA Đã Kích Hoạt
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-300/80">
+                        (Có thể tăng tốc GPU)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-emerald-300/70 truncate">
+                    {gpuInfo.gpuEnabled
+                      ? 'AI Whisper sẽ sử dụng nhân CUDA trên card đồ họa để nhận diện siêu tốc.'
+                      : 'Kích hoạt gói CUDA để AI tận dụng card đồ họa, nhanh hơn 10x-20x so với CPU.'}
+                  </p>
+                </div>
+              </div>
+
+              {!gpuInfo.gpuEnabled && (
+                <button
+                  onClick={handleDownloadGPU}
+                  disabled={activeGPUDownload !== null}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{activeGPUDownload ? 'Đang tải...' : 'Bật CUDA GPU'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* GPU Download Progress Bar */}
+          {activeGPUDownload && (
+            <div className="p-3 rounded-xl bg-black/40 border border-emerald-500/30 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                  <Download className="w-3.5 h-3.5 animate-bounce" /> Đang tải gói CUDA runtime: {Math.round(activeGPUDownload.percentage)}%
+                </span>
+                <span className="text-fluent-text-muted font-mono text-[10px]">
+                  {(activeGPUDownload.downloadedBytes / (1024 * 1024)).toFixed(0)} / {(activeGPUDownload.totalBytes / (1024 * 1024)).toFixed(0)} MB
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-400 transition-[width] duration-150"
+                  style={{ width: `${activeGPUDownload.percentage}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Model Cards */}
           <div className="space-y-2.5">
@@ -119,7 +215,7 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
               return (
                 <div
                   key={mod.id}
-                  onClick={() => setSelectedModelId(mod.id)}
+                  onClick={() => handleSelectModel(mod.id)}
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer relative flex flex-col gap-2 ${
                     isSelected
                       ? 'bg-fluent-accent/15 border-fluent-accent shadow-accent-glow'
@@ -150,6 +246,11 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
                       <span className="text-xs font-mono font-semibold text-fluent-text-secondary">
                         ~{mod.sizeMb} MB
                       </span>
+                      {isSelected && (
+                        <span className="text-[10px] text-fluent-accent font-bold mt-1">
+                          ✓ Đang chọn
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -207,19 +308,19 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
             {(() => {
               const selectedMod = models.find((m) => m.id === selectedModelId);
               const isSelectedDownloaded = selectedMod?.downloaded;
-              const isDownloading = activeDownload !== null;
+              const isDownloading = activeDownload !== null || activeGPUDownload !== null;
 
               return (
                 <button
                   onClick={handleStart}
                   disabled={isDownloading}
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-fluent-accent hover:bg-fluent-accent-hover active:bg-fluent-accent-active text-black font-semibold text-xs shadow-accent-glow transition-all disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-fluent-accent hover:bg-fluent-accent-hover active:bg-fluent-accent-active text-black font-semibold text-xs shadow-accent-glow transition-all disabled:opacity-40 cursor-pointer"
                 >
                   {isDownloading ? (
                     <>Đang tải dữ liệu...</>
                   ) : isSelectedDownloaded ? (
                     <>
-                      <Sparkles className="w-3.5 h-3.5 fill-current" /> Bắt đầu phân đoạn câu
+                      <Sparkles className="w-3.5 h-3.5 fill-current" /> Bắt đầu với model này
                     </>
                   ) : (
                     <>

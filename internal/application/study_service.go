@@ -51,6 +51,16 @@ func (s *StudyService) DownloadModel(modelID string, onProgress func(study.Model
 	return s.modelManager.DownloadModel(modelID, onProgress)
 }
 
+// GetGPUInfo returns details about NVIDIA GPU and CUDA acceleration status
+func (s *StudyService) GetGPUInfo() study.GPUInfo {
+	return s.whisperEngine.GetGPUInfo()
+}
+
+// DownloadGPUAcceleration downloads and extracts whisper-cublas package for GPU acceleration
+func (s *StudyService) DownloadGPUAcceleration(onProgress func(study.ModelDownloadProgress)) error {
+	return s.whisperEngine.DownloadGPUAcceleration(onProgress)
+}
+
 // CancelLessonProcessing cancels any active transcription process for the given fingerprint
 func (s *StudyService) CancelLessonProcessing(fingerprint string) bool {
 	s.mu.Lock()

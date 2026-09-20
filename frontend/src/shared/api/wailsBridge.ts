@@ -5,6 +5,7 @@ import {
   ModelDownloadProgress,
   DictationAttempt,
   TranscribeProgress,
+  GPUInfo,
 } from '../../entities/study/types';
 
 declare global {
@@ -70,6 +71,8 @@ declare global {
             revealed: boolean
           ) => Promise<Lesson | null>;
           CancelLessonProcessing: (fingerprint: string) => Promise<boolean>;
+          GetGPUInfo: () => Promise<GPUInfo>;
+          DownloadGPUAcceleration: () => Promise<void>;
         };
       };
     };
@@ -295,7 +298,27 @@ export const WailsBridge = {
     return false;
   },
 
+  async getGPUInfo(): Promise<GPUInfo> {
+    if (window.go?.main?.App?.GetGPUInfo) {
+      return await window.go.main.App.GetGPUInfo();
+    }
+    return { hasNvidiaGpu: false, gpuName: '', gpuEnabled: false };
+  },
+
+  async downloadGPUAcceleration(): Promise<void> {
+    if (window.go?.main?.App?.DownloadGPUAcceleration) {
+      await window.go.main.App.DownloadGPUAcceleration();
+    }
+  },
+
   // Event Listeners
+  onGPUDownloadProgress(callback: (progress: ModelDownloadProgress) => void): () => void {
+    if (window.runtime?.EventsOn) {
+      return window.runtime.EventsOn('gpu:download:progress', callback);
+    }
+    return () => {};
+  },
+
   onScanProgress(callback: (progress: ScanProgress) => void): () => void {
     if (window.runtime?.EventsOn) {
       return window.runtime.EventsOn('scan:progress', callback);

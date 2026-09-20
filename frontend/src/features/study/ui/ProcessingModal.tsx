@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, Sparkles, AudioWaveform, CheckCircle2, XCircle } from 'lucide-react';
+import { RefreshCw, Sparkles, AudioWaveform, CheckCircle2, XCircle, Cpu } from 'lucide-react';
 
 interface ProcessingModalProps {
   isOpen: boolean;
@@ -7,6 +7,7 @@ interface ProcessingModalProps {
   statusText?: string;
   sentenceCount?: number;
   recentSentences?: string[];
+  activeModelName?: string;
   onCancel?: () => void;
 }
 
@@ -16,9 +17,12 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
   statusText = 'Đang phân tích âm thanh và phân đoạn câu bằng AI...',
   sentenceCount = 0,
   recentSentences = [],
+  activeModelName,
   onCancel,
 }) => {
   if (!isOpen) return null;
+
+  const isHeavyModel = activeModelName?.toLowerCase().includes('1.1') || activeModelName?.toLowerCase().includes('large-v3 q5');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
@@ -40,6 +44,26 @@ export const ProcessingModal: React.FC<ProcessingModalProps> = ({
             {statusText}
           </p>
         </div>
+
+        {/* Model Badge */}
+        {activeModelName && (
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-fluent-text-secondary">
+            <Cpu className="w-3.5 h-3.5 text-fluent-accent" />
+            <span>Mô hình: <strong className="text-white font-semibold">{activeModelName}</strong></span>
+            <span>•</span>
+            <span className="text-emerald-400 font-medium">Đa luồng song song (-p 2)</span>
+          </div>
+        )}
+
+        {/* Speed Advice for Heavy Model */}
+        {isHeavyModel && (
+          <div className="w-full p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] text-left flex items-start gap-2">
+            <span className="text-amber-400 font-bold shrink-0">💡 Gợi ý:</span>
+            <span>
+              Bạn đang dùng bản Large-v3 32 tầng giải mã (~1.1GB). Để tốc độ nhận diện nhanh hơn gấp 8 lần, bạn có thể chọn tải bản <strong>Whisper Turbo Q5</strong> (~547MB) trong phần Quản lý Model.
+            </span>
+          </div>
+        )}
 
         {/* Percentage & Progress Bar */}
         <div className="w-full space-y-2">
