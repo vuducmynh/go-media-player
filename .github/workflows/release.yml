@@ -52,6 +52,16 @@ jobs:
           npm ci
           cd ..
 
+      - name: Build Frontend Assets (React + Vite + Tailwind)
+        shell: powershell
+        run: |
+          cd frontend
+          npm run build
+          cd ..
+          if (-not (Test-Path "frontend\dist\index.html")) {
+            throw "Frontend build failed: frontend\dist\index.html was not generated!"
+          }
+
       - name: Build Application with Wails
         shell: powershell
         run: |
