@@ -205,6 +205,22 @@ func (a *App) SavePlaybackProgress(fingerprint string, path string, position flo
 	return a.store.SavePlaybackState(state)
 }
 
+// ClearPlaybackProgress removes playback progress for a fingerprint
+func (a *App) ClearPlaybackProgress(fingerprint string) error {
+	if a.store == nil || fingerprint == "" {
+		return nil
+	}
+	return a.store.DeletePlaybackState(fingerprint)
+}
+
+// ClearAllPlaybackProgress removes all playback progress
+func (a *App) ClearAllPlaybackProgress() error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.ClearAllPlaybackStates()
+}
+
 // GetStreamURL returns the streamable HTTP URL for a specific file
 func (a *App) GetStreamURL(filePath string) string {
 	if a.streamer == nil {

@@ -154,6 +154,24 @@ func (s *Store) SavePlaybackState(state models.PlaybackState) error {
 	return s.saveLocked()
 }
 
+// DeletePlaybackState removes saved playback progress for a fingerprint
+func (s *Store) DeletePlaybackState(fingerprint string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.data.PlaybackStates, fingerprint)
+	return s.saveLocked()
+}
+
+// ClearAllPlaybackStates removes all saved playback progress
+func (s *Store) ClearAllPlaybackStates() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.data.PlaybackStates = make(map[string]*models.PlaybackState)
+	return s.saveLocked()
+}
+
 // GetCachedFingerprint checks if we already hashed this file with matching size & modtime
 func (s *Store) GetCachedFingerprint(path string, size int64, modTime time.Time) (string, bool) {
 	s.mu.RLock()

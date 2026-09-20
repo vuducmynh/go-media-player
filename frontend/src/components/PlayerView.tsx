@@ -20,6 +20,7 @@ import { formatTime } from '../utils/formatters';
 import { AudioVisualizer } from './AudioVisualizer';
 import { ListeningControls } from './ListeningControls';
 import { WailsBridge } from '../services/wailsBridge';
+import { useHotkeys } from '../hooks/useHotkeys';
 
 interface PlayerViewProps {
   currentFile: MediaFile | null;
@@ -187,7 +188,8 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const seekTo = (seconds: number) => {
     const media = mediaRef.current;
     if (!media || isNaN(seconds)) return;
-    const clamped = Math.max(0, Math.min(seconds, duration));
+    const maxDur = media.duration && !isNaN(media.duration) ? media.duration : duration || 0;
+    const clamped = Math.max(0, maxDur > 0 ? Math.min(seconds, maxDur) : seconds);
     media.currentTime = clamped;
     setCurrentTime(clamped);
   };
@@ -195,7 +197,8 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const seekDelta = (delta: number) => {
     const media = mediaRef.current;
     if (!media) return;
-    seekTo(media.currentTime + delta);
+    const cur = !isNaN(media.currentTime) ? media.currentTime : currentTime;
+    seekTo(cur + delta);
   };
 
   const handleSpeedChange = (newSpeed: number) => {
@@ -270,6 +273,25 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     setLoopB(0);
     setIsLoopActive(false);
   };
+
+  // Hook up full keyboard shortcuts directly to player
+  useHotkeys(
+    {
+      togglePlay,
+      seekDelta,
+      adjustSpeed: (delta) => handleSpeedChange(normalSpeed + delta),
+      setSlowSpeedActive,
+      setLoopA: setLoopPointA,
+      setLoopB: setLoopPointB,
+      toggleLoop,
+      clearLoop,
+      toggleMute,
+      adjustVolume: (delta) => handleVolumeChange(volume + delta),
+      toggleFullscreen,
+    },
+    settings,
+    Boolean(currentFile)
+  );
 
   // Timeline Scrub Hover
   const handleTimelineMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {

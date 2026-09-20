@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   FolderPlus,
   RefreshCw,
@@ -14,12 +14,12 @@ import {
   Play,
   Layers,
   ChevronDown,
-  ChevronRight,
   ExternalLink,
-  Sparkles,
+  Trash2,
+  Clock,
 } from 'lucide-react';
 import { MediaFile, FilterCategory, ScanProgress, AppSettings } from '../types';
-import { formatTime, formatFileSize } from '../utils/formatters';
+import { formatTime, formatFileSize, formatDate } from '../utils/formatters';
 
 interface SidebarProps {
   files: MediaFile[];
@@ -39,6 +39,8 @@ interface SidebarProps {
   onOpenSettings: () => void;
   onOpenHotkeysGuide: () => void;
   onOpenFileFolder: (path: string) => void;
+  onClearFileProgress?: (fingerprint: string) => void;
+  onClearAllProgress?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -59,6 +61,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   onOpenHotkeysGuide,
   onOpenFileFolder,
+  onClearFileProgress,
+  onClearAllProgress,
 }) => {
   const [isFolderPickerExpanded, setIsFolderPickerExpanded] = useState(false);
 
@@ -80,34 +84,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   });
 
-  // Filter files by active folder and search/category filters
-  const currentFolderFiles = files.filter((file) => {
-    // If an activeFolder is selected, ONLY show files from this folder
-    if (activeFolder && activeFolder !== 'ALL') {
-      if (file.folderRoot !== activeFolder) {
-        return false;
+  // Filter and sort files by active folder, search, and category filters
+  const currentFolderFiles = useMemo(() => {
+    let list = files.filter((file) => {
+      // If an activeFolder is selected, ONLY show files from this folder
+      if (activeFolder && activeFolder !== 'ALL') {
+        if (file.folderRoot !== activeFolder) {
+          return false;
+        }
       }
-    }
 
-    // Category filter
-    if (activeFilter === 'audio' && file.type !== 'audio') return false;
-    if (activeFilter === 'video' && file.type !== 'video') return false;
+      // Category filter
+      if (activeFilter === 'audio' && file.type !== 'audio') return false;
+      if (activeFilter === 'video' && file.type !== 'video') return false;
+      if (activeFilter === 'in_progress') {
+        if (file.completed || file.lastPosition <= 0) return false;
+      }
+      if (activeFilter === 'completed' && !file.completed) return false;
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = file.name.toLowerCase().includes(q);
+        const matchTitle = file.title.toLowerCase().includes(q);
+        const matchDir = file.relativeDir.toLowerCase().includes(q);
+        if (!matchName && !matchTitle && !matchDir) return false;
+      }
+
+      return true;
+    });
+
+    // When in "Đang nghe" (in_progress) tab, sort by most recently played first!
     if (activeFilter === 'in_progress') {
-      if (file.completed || file.lastPosition <= 0) return false;
-    }
-    if (activeFilter === 'completed' && !file.completed) return false;
-
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = file.name.toLowerCase().includes(q);
-      const matchTitle = file.title.toLowerCase().includes(q);
-      const matchDir = file.relativeDir.toLowerCase().includes(q);
-      if (!matchName && !matchTitle && !matchDir) return false;
+      list = [...list].sort((a, b) => {
+        const timeA = a.lastPlayedAt ? new Date(a.lastPlayedAt).getTime() : 0;
+        const timeB = b.lastPlayedAt ? new Date(b.lastPlayedAt).getTime() : 0;
+        return timeB - timeA;
+      });
     }
 
-    return true;
-  });
+    return list;
+  }, [files, activeFolder, activeFilter, searchQuery]);
 
   const activeFolderStat = folderStats.find((f) => f.path === activeFolder);
   const currentFolderName =
@@ -129,7 +146,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               alt="Logo"
               className="w-full h-full object-cover"
               onError={(e) => {
-                // Fallback icon if image path fails
                 (e.target as HTMLElement).style.display = 'none';
               }}
             />
@@ -373,7 +389,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => onFilterChange('in_progress')}
             className={`px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors ${
               activeFilter === 'in_progress'
-                ? 'bg-amber-500/30 text-amber-300 font-semibold border border-amber-500/50'
+                ? 'bg-amber-500/30 text-amber-300 font-semibold border border-amber-500/50 shadow-sm'
                 : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
             }`}
           >
@@ -392,6 +408,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
+      {/* In-progress helper banner with Clear All button */}
+      {activeFilter === 'in_progress' && (
+        <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Đang nghe ({currentFolderFiles.length}) • Gần đây nhất lên đầu</span>
+          </span>
+          {currentFolderFiles.length > 0 && onClearAllProgress && (
+            <button
+              onClick={onClearAllProgress}
+              className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-semibold transition-colors flex items-center gap-1"
+              title="Xóa toàn bộ tiến trình đang nghe"
+            >
+              <Trash2 className="w-2.5 h-2.5" /> Dọn tất cả
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Media Files List */}
       <div className="flex-1 overflow-y-auto divide-y divide-white/[0.03]">
         {currentFolderFiles.length === 0 ? (
@@ -399,6 +434,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <FolderOpen className="w-10 h-10 text-white/10 mb-3" />
             {settings.folders.length === 0 ? (
               <p>Chưa có thư mục nào. Nhấn "+ Thêm" ở trên để chọn thư mục media.</p>
+            ) : activeFilter === 'in_progress' ? (
+              <p>Danh sách đang nghe trống. Bạn chưa nghe dở file nào.</p>
             ) : (
               <p>Không có file nào trong thư mục này phù hợp với bộ lọc.</p>
             )}
@@ -450,28 +487,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       {file.title || file.name}
                     </p>
-                    {file.completed ? (
-                      <span title="Đã hoàn thành">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      </span>
-                    ) : (
-                      file.duration > 0 && (
-                        <span className="text-[10px] text-fluent-text-muted font-mono shrink-0">
-                          {formatTime(file.duration)}
+
+                    {/* Right action group: Clear button and status/duration */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Clear progress button for individual file */}
+                      {file.lastPosition > 0 && onClearFileProgress && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onClearFileProgress(file.fingerprint);
+                          }}
+                          title="Dọn dẹp: Xóa khỏi danh sách đang nghe (đặt lại tiến trình)"
+                          className="p-1 rounded hover:bg-red-500/20 text-fluent-text-muted hover:text-red-400 transition-colors opacity-70 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+
+                      {file.completed ? (
+                        <span title="Đã hoàn thành">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         </span>
-                      )
-                    )}
+                      ) : (
+                        file.duration > 0 && (
+                          <span className="text-[10px] text-fluent-text-muted font-mono shrink-0">
+                            {formatTime(file.duration)}
+                          </span>
+                        )
+                      )}
+                    </div>
                   </div>
 
-                  {/* Subfolder relative path */}
-                  <p className="text-[10px] text-fluent-text-muted truncate mt-0.5 flex items-center gap-1">
-                    {file.relativeDir && (
-                      <span className="px-1 py-0.2 bg-white/5 rounded text-[9px] text-fluent-text-secondary">
-                        📁 {file.relativeDir}
+                  {/* Subfolder relative path and last played time */}
+                  <div className="flex items-center justify-between text-[10px] text-fluent-text-muted mt-0.5">
+                    <p className="truncate flex items-center gap-1 min-w-0 flex-1 mr-1">
+                      {file.relativeDir && (
+                        <span className="px-1 py-0.2 bg-white/5 rounded text-[9px] text-fluent-text-secondary shrink-0">
+                          📁 {file.relativeDir}
+                        </span>
+                      )}
+                      <span className="truncate">{file.name}</span>
+                    </p>
+                    {file.lastPlayedAt && (
+                      <span className="text-[9px] text-amber-300/80 font-mono shrink-0">
+                        {formatDate(file.lastPlayedAt)}
                       </span>
                     )}
-                    <span>{file.name}</span>
-                  </p>
+                  </div>
 
                   {/* Progress Bar & Saved Info */}
                   <div className="flex items-center justify-between gap-2 mt-1.5">

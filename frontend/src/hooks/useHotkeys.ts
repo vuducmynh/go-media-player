@@ -20,6 +20,12 @@ export function useHotkeys(
   settings: AppSettings,
   enabled: boolean = true
 ) {
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
   const isSlowPressedRef = useRef(false);
 
   useEffect(() => {
@@ -36,17 +42,23 @@ export function useHotkeys(
         return;
       }
 
+      const currentSettings = settingsRef.current;
+      const currentHandlers = handlersRef.current;
+      const jump = currentSettings.jumpSeconds > 0 ? currentSettings.jumpSeconds : 5;
+
       // Check Hold-to-slow key
-      const holdKey = settings.holdSlowKey || 'KeyS';
+      const holdKey = currentSettings.holdSlowKey || 'KeyS';
       const isTargetHoldKey =
         e.code === holdKey ||
-        (holdKey.toLowerCase() === 'shift' && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) ||
+        (holdKey.includes('Shift') && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) ||
+        (holdKey.includes('Control') && (e.code === 'ControlLeft' || e.code === 'ControlRight')) ||
+        (holdKey.includes('Alt') && (e.code === 'AltLeft' || e.code === 'AltRight')) ||
         (holdKey.toLowerCase() === 'keys' && e.code === 'KeyS');
 
       if (isTargetHoldKey) {
         if (!isSlowPressedRef.current && !e.repeat) {
           isSlowPressedRef.current = true;
-          handlers.setSlowSpeedActive(true);
+          currentHandlers.setSlowSpeedActive(true);
         }
         return;
       }
@@ -54,76 +66,76 @@ export function useHotkeys(
       switch (e.code) {
         case 'Space':
           e.preventDefault();
-          handlers.togglePlay();
+          currentHandlers.togglePlay();
           break;
 
         case 'ArrowLeft':
           e.preventDefault();
-          handlers.seekDelta(-settings.jumpSeconds);
+          currentHandlers.seekDelta(-jump);
           break;
 
         case 'ArrowRight':
           e.preventDefault();
-          handlers.seekDelta(settings.jumpSeconds);
+          currentHandlers.seekDelta(jump);
           break;
 
         case 'ArrowUp':
           e.preventDefault();
-          handlers.adjustVolume(0.05);
+          currentHandlers.adjustVolume(0.05);
           break;
 
         case 'ArrowDown':
           e.preventDefault();
-          handlers.adjustVolume(-0.05);
+          currentHandlers.adjustVolume(-0.05);
           break;
 
         case 'BracketLeft': // [
           e.preventDefault();
-          handlers.adjustSpeed(-0.1);
+          currentHandlers.adjustSpeed(-0.1);
           break;
 
         case 'BracketRight': // ]
           e.preventDefault();
-          handlers.adjustSpeed(0.1);
+          currentHandlers.adjustSpeed(0.1);
           break;
 
         case 'KeyA':
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            handlers.setLoopA();
+            currentHandlers.setLoopA();
           }
           break;
 
         case 'KeyB':
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            handlers.setLoopB();
+            currentHandlers.setLoopB();
           }
           break;
 
         case 'KeyL':
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            handlers.toggleLoop();
+            currentHandlers.toggleLoop();
           }
           break;
 
         case 'KeyC':
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            handlers.clearLoop();
+            currentHandlers.clearLoop();
           }
           break;
 
         case 'KeyM':
           e.preventDefault();
-          handlers.toggleMute();
+          currentHandlers.toggleMute();
           break;
 
         case 'KeyF':
-          if (handlers.toggleFullscreen) {
+          if (currentHandlers.toggleFullscreen) {
             e.preventDefault();
-            handlers.toggleFullscreen();
+            currentHandlers.toggleFullscreen();
           }
           break;
 
@@ -133,22 +145,26 @@ export function useHotkeys(
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      const holdKey = settings.holdSlowKey || 'KeyS';
+      const currentSettings = settingsRef.current;
+      const currentHandlers = handlersRef.current;
+      const holdKey = currentSettings.holdSlowKey || 'KeyS';
       const isTargetHoldKey =
         e.code === holdKey ||
-        (holdKey.toLowerCase() === 'shift' && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) ||
+        (holdKey.includes('Shift') && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) ||
+        (holdKey.includes('Control') && (e.code === 'ControlLeft' || e.code === 'ControlRight')) ||
+        (holdKey.includes('Alt') && (e.code === 'AltLeft' || e.code === 'AltRight')) ||
         (holdKey.toLowerCase() === 'keys' && e.code === 'KeyS');
 
       if (isTargetHoldKey) {
         isSlowPressedRef.current = false;
-        handlers.setSlowSpeedActive(false);
+        currentHandlers.setSlowSpeedActive(false);
       }
     };
 
     const handleBlur = () => {
       if (isSlowPressedRef.current) {
         isSlowPressedRef.current = false;
-        handlers.setSlowSpeedActive(false);
+        handlersRef.current.setSlowSpeedActive(false);
       }
     };
 
@@ -161,5 +177,5 @@ export function useHotkeys(
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [handlers, settings, enabled]);
+  }, [enabled]);
 }

@@ -20,6 +20,8 @@ declare global {
             loopA: number,
             loopB: number
           ) => Promise<void>;
+          ClearPlaybackProgress: (fingerprint: string) => Promise<void>;
+          ClearAllPlaybackProgress: () => Promise<void>;
           GetStreamURL: (filePath: string) => Promise<string>;
           OpenFileInExplorer: (filePath: string) => Promise<void>;
         };
@@ -108,6 +110,18 @@ export const WailsBridge = {
   ): Promise<void> {
     if (window.go?.main?.App?.SavePlaybackProgress) {
       await window.go.main.App.SavePlaybackProgress(fingerprint, path, position, duration, loopA, loopB);
+    }
+  },
+
+  async clearPlaybackProgress(fingerprint: string): Promise<void> {
+    if (window.go?.main?.App?.ClearPlaybackProgress) {
+      await window.go.main.App.ClearPlaybackProgress(fingerprint);
+    }
+  },
+
+  async clearAllPlaybackProgress(): Promise<void> {
+    if (window.go?.main?.App?.ClearAllPlaybackProgress) {
+      await window.go.main.App.ClearAllPlaybackProgress();
     }
   },
 

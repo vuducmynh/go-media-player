@@ -5,7 +5,6 @@ import { Sidebar } from './components/Sidebar';
 import { PlayerView } from './components/PlayerView';
 import { SettingsModal } from './components/SettingsModal';
 import { HotkeysGuideModal } from './components/HotkeysGuideModal';
-import { useHotkeys } from './hooks/useHotkeys';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>({
@@ -166,6 +165,7 @@ export const App: React.FC = () => {
       if (!currentFile || currentFile.fingerprint !== fingerprint) return;
 
       const completed = duration > 0 && position >= duration * 0.95;
+      const nowIso = new Date().toISOString();
 
       // Update backend
       await WailsBridge.savePlaybackProgress(
@@ -177,7 +177,7 @@ export const App: React.FC = () => {
         loopB
       );
 
-      // Update state in memory
+      // Update state in memory with timestamp
       setFiles((prevFiles) =>
         prevFiles.map((f) =>
           f.fingerprint === fingerprint
@@ -188,6 +188,7 @@ export const App: React.FC = () => {
                 completed: completed || f.completed,
                 loopA,
                 loopB,
+                lastPlayedAt: nowIso,
               }
             : f
         )
@@ -202,12 +203,70 @@ export const App: React.FC = () => {
               completed: completed || prev.completed,
               loopA,
               loopB,
+              lastPlayedAt: nowIso,
             }
           : prev
       );
     },
     [currentFile]
   );
+
+  // Clear progress for a specific file (removes from "Đang nghe")
+  const handleClearFileProgress = useCallback(
+    async (fingerprint: string) => {
+      await WailsBridge.clearPlaybackProgress(fingerprint);
+
+      setFiles((prevFiles) =>
+        prevFiles.map((f) =>
+          f.fingerprint === fingerprint
+            ? {
+                ...f,
+                lastPosition: 0,
+                completed: false,
+                lastPlayedAt: undefined,
+              }
+            : f
+        )
+      );
+
+      setCurrentFile((prev) =>
+        prev && prev.fingerprint === fingerprint
+          ? {
+              ...prev,
+              lastPosition: 0,
+              completed: false,
+              lastPlayedAt: undefined,
+            }
+          : prev
+      );
+    },
+    []
+  );
+
+  // Clear all in-progress files
+  const handleClearAllProgress = useCallback(async () => {
+    await WailsBridge.clearAllPlaybackProgress();
+
+    setFiles((prevFiles) =>
+      prevFiles.map((f) => ({
+        ...f,
+        lastPosition: 0,
+        completed: false,
+        lastPlayedAt: undefined,
+      }))
+    );
+
+    setCurrentFile((prev) =>
+      prev
+        ? {
+            ...prev,
+            lastPosition: 0,
+            completed: false,
+            lastPlayedAt: undefined,
+          }
+        : prev
+    );
+  }, []);
 
   // Filtered files within active folder for next/previous navigation
   const activeFolderFiles = useMemo(() => {
@@ -263,26 +322,6 @@ export const App: React.FC = () => {
     await WailsBridge.saveSettings(newSettings);
   };
 
-  // Hotkey Handlers
-  useHotkeys(
-    {
-      togglePlay: () => {},
-      seekDelta: (seconds: number) => {},
-      adjustSpeed: (delta: number) => {},
-      setSlowSpeedActive: (active: boolean) => {
-        setIsSlowHeld(active);
-      },
-      setLoopA: () => {},
-      setLoopB: () => {},
-      toggleLoop: () => {},
-      clearLoop: () => {},
-      toggleMute: () => {},
-      adjustVolume: () => {},
-    },
-    settings,
-    true
-  );
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-fluent-bg-darker text-fluent-text-primary">
       {/* Sidebar with isolated Folder Switcher */}
@@ -304,9 +343,11 @@ export const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenHotkeysGuide={() => setIsHotkeysOpen(true)}
         onOpenFileFolder={handleOpenFileFolder}
+        onClearFileProgress={handleClearFileProgress}
+        onClearAllProgress={handleClearAllProgress}
       />
 
-      {/* Main Player View */}
+      {/* Main Player View (with connected hotkeys) */}
       <PlayerView
         currentFile={currentFile}
         settings={settings}
