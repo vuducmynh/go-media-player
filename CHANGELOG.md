@@ -4,6 +4,24 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.1] - 21/09/2026
+
+# Nâng cấp giao diện Cập nhật ứng dụng (Changelog Markdown UI)
+
+Bản cập nhật v1.3.1 mang đến giao diện xem thông tin cập nhật hoàn toàn mới theo phong cách hiện đại, hiển thị trực tiếp ghi chú thay đổi và loại bỏ các thành phần kỹ thuật không cần thiết.
+
+### Cải tiến (3)
+- **Giao diện Changelog trực quan & rộng rãi**: Mở rộng kích thước cửa sổ cập nhật lên chuẩn `max-w-3xl`, tự động hiển thị đầy đủ ghi chú thay đổi với thanh cuộn mượt mà.
+- **3 nhóm thay đổi có đếm số lượng & Accordion**: Phân loại rõ ràng thành Cải tiến (Improvements), Sửa lỗi (Fixes), Bản vá (Patches) kèm đếm số lượng và đóng/mở tiện lợi.
+- **Loại bỏ hiệu ứng nhảy nút bấm**: Nút Cài đặt ở thanh trạng thái được chuyển sang dạng cố định thanh lịch, không còn hiệu ứng `animate-bounce` gây mất tập trung.
+
+### Sửa lỗi (1)
+- **Gỡ bỏ hộp kiểm tra kỹ thuật**: Bỏ hoàn toàn khung hiển thị tiến trình tải/sao lưu/thay thế kỹ thuật để người dùng tập trung hoàn toàn vào nội dung thay đổi của ứng dụng.
+
+### Bản vá (0)
+
+---
+
 ## [v1.3.0] - 21/09/2026
 
 # Luyện nghe sâu Video & YouTube với AI Whisper
