@@ -85,7 +85,7 @@ frontend/src/
 
 ---
 
-## 3. Quy Tắc Biên Dịch & Chạy Lệnh Trên Windows (Anti-Hang Execution)
+## 3. Quy Tắc Biên Dịch & Chạy Lệnh Trên Windows (Anti-Hang & Local-First)
 
 Khi thực thi biên dịch hoặc chạy lệnh terminal trên Windows:
 1. **Tránh treo lệnh vĩnh viễn (Anti-Hang)**:
@@ -93,11 +93,14 @@ Khi thực thi biên dịch hoặc chạy lệnh terminal trên Windows:
      `cmd.exe /c "build.bat < nul"`
    - Luôn đặt `WaitMsBeforeAsync: 10000` để chờ lệnh hoàn tất đồng bộ một cách an toàn.
 2. **Dọn dẹp tiến trình cũ trước khi build**:
-   - File executable đang chạy sẽ khóa đĩa. Luôn đảm bảo đóng tiến trình cũ:
+   - File executable đang chạy sẽ khóa đĩa (`Access is denied`). Luôn đảm bảo đóng tiến trình cũ:
      `taskkill /F /IM go-audio-player.exe /IM go-audio-play.exe 2>nul`
 3. **Kiểm tra 2 bước**:
    - Bước 1: `npm run build` trong thư mục `frontend/` (xác thực không có lỗi TypeScript / JSX).
    - Bước 2: `cmd.exe /c "build.bat < nul"` tại thư mục gốc (xác thực binary Wails và WebView2).
+4. **Luôn tạo sẵn file exe cục bộ (`go-audio-player.exe`) sau khi hoàn tất**:
+   - Mỗi khi hoàn tất bất kỳ tính năng hoặc bản vá lỗi nào, Agent **BẮT BUỘC** phải chạy `cmd.exe /c "build.bat < nul"` để tạo mới file `go-audio-player.exe` ngay tại thư mục gốc dự án.
+   - Người dùng cần mở lên dùng thử và kiểm tra ngay tại máy cục bộ mà không phải đợi GitHub Actions hay lên web tải về thủ công.
 
 ---
 
@@ -105,17 +108,19 @@ Khi thực thi biên dịch hoặc chạy lệnh terminal trên Windows:
 
 Khi thêm tính năng mới hoặc sửa lỗi sẵn sàng phát hành, Agent phải tuân thủ chuẩn xác **6 bước bắt buộc**:
 
-### Bước 1: Cập nhật số phiên bản tập trung
-- Mở `internal/application/updater_service.go`, nâng phiên bản trong hằng số:
-  ```go
-  const CurrentAppVersion = "vX.Y.Z"
-  ```
-- Nếu cần, cập nhật version trong `wails.json` và `frontend/package.json` cho đồng bộ.
+### Bước 1: Đồng bộ số phiên bản tập trung
+- Phải cập nhật đồng bộ ở cả 3 tệp:
+  1. `internal/application/updater_service.go`:
+     ```go
+     const CurrentAppVersion = "vX.Y.Z"
+     ```
+  2. `wails.json`: `"productVersion": "X.Y.Z"`
+  3. `frontend/package.json`: `"version": "X.Y.Z"`
 
 ### Bước 2: Biên dịch và kiểm thử cục bộ
 - Chạy `npm run build` tại `frontend/`.
 - Chạy `cmd.exe /c "build.bat < nul"` tại thư mục gốc.
-- Đảm bảo mã lỗi thoát là `0` (không có cảnh báo nghiêm trọng hay lỗi biên dịch).
+- Đảm bảo mã lỗi thoát là `0` và file `go-audio-player.exe` mới nhất đã được tạo tại thư mục gốc.
 
 ### Bước 3: Commit mã nguồn
 - Định dạng commit chuẩn Conventional Commits:
@@ -141,3 +146,4 @@ Khi thêm tính năng mới hoặc sửa lỗi sẵn sàng phát hành, Agent ph
   2. Hiển thị nút `[ Cập nhật vX.Y.Z ]` ở góc dưới Sidebar.
   3. Tải xuống với hiển thị phần trăm thời gian thực.
   4. Thay thế file an toàn bằng cơ chế đổi tên `.old` và khởi động lại.
+

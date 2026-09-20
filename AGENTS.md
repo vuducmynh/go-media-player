@@ -21,20 +21,26 @@ Chi tiết runbook đầy đủ được lưu tại: [`.agents/skills/architectu
 
 ---
 
-## 3. Quy Tắc Biên Dịch & Chạy Lệnh Trên Windows (Anti-Hang)
-- Không bao giờ chạy `build.bat` trực tiếp vì có lệnh `pause`. Luôn luôn chạy:
+## 3. Quy Tắc Biên Dịch & Chạy Lệnh Trên Windows (Anti-Hang & Local-First)
+- **Tuyệt đối không chạy `build.bat` trực tiếp** vì có lệnh `pause` gây treo vĩnh viễn tiến trình của agent. Luôn luôn chạy:
   ```powershell
   cmd.exe /c "build.bat < nul"
   ```
-- Luôn kiểm tra `npm run build` trong `frontend/` trước khi build Wails binary.
+- **Luôn kiểm tra 2 bước**: Chạy `npm run build` trong `frontend/` trước khi build Wails binary.
+- **Tự động đóng app cũ**: Luôn chạy `taskkill /F /IM go-audio-player.exe /IM go-audio-play.exe 2>nul` để tránh lỗi khóa file của Windows (`Access is denied`).
+- **Luôn tạo sẵn file exe cục bộ (`go-audio-player.exe`) sau khi làm xong**: Mỗi khi hoàn tất một tính năng hoặc sửa lỗi, Agent **BẮT BUỘC** phải biên dịch ra file `go-audio-player.exe` ngay tại thư mục gốc dự án để người dùng mở lên dùng thử cục bộ ngay lập tức mà không phải lên GitHub tải về thủ công hay chờ GitHub Actions.
 
 ---
 
 ## 4. Quy Trình Phát Hành & Tự Động Cập Nhật (Release & Update Workflow)
 Khi hoàn tất tính năng mới hoặc bản vá lỗi sẵn sàng phát hành:
-1. Nâng phiên bản `CurrentAppVersion = "vX.Y.Z"` trong `internal/application/updater_service.go`.
-2. Biên dịch kiểm thử: `npm run build` và `cmd.exe /c "build.bat < nul"`.
-3. Commit mã nguồn: `git add .` và `git commit -m "feat: ..."` (Conventional Commits).
-4. Đẩy mã nguồn: `git push origin main`.
-5. Tạo và đẩy Tag: `git tag vX.Y.Z` và `git push origin vX.Y.Z`.
-6. GitHub Actions (`.github/workflows/release.yml`) tự động đóng gói file `.exe` và `.zip`, kích hoạt tính năng tự động cập nhật trong ứng dụng của người dùng.
+1. **Đồng bộ phiên bản ở cả 3 tệp**:
+   - `internal/application/updater_service.go` (`CurrentAppVersion = "vX.Y.Z"`).
+   - `wails.json` (`"productVersion": "X.Y.Z"`).
+   - `frontend/package.json` (`"version": "X.Y.Z"`).
+2. **Biên dịch kiểm thử cục bộ**: `npm run build` và `cmd.exe /c "build.bat < nul"` (đảm bảo file `go-audio-player.exe` đã được tạo mới).
+3. **Commit mã nguồn**: `git add .` và `git commit -m "feat: ..."` (Conventional Commits).
+4. **Đẩy mã nguồn**: `git push origin main`.
+5. **Tạo và đẩy Tag**: `git tag vX.Y.Z` và `git push origin vX.Y.Z`.
+6. **GitHub Actions (`.github/workflows/release.yml`)** tự động đóng gói file `.exe` và `.zip`, kích hoạt tính năng tự động cập nhật trong ứng dụng của người dùng.
+
