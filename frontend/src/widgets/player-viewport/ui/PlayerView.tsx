@@ -71,7 +71,18 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [volume, setVolume] = useState<number>(settings.volume ?? 0.9);
+  const [volume, setVolume] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('app_volume');
+      if (saved !== null) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return settings.volume ?? 1.0;
+  });
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [playbackRate, setPlaybackRate] = useState<number>(settings.defaultSpeed ?? 1.0);
   const [normalSpeed, setNormalSpeed] = useState<number>(settings.defaultSpeed ?? 1.0);
@@ -131,6 +142,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     containerRef: ytContainerRef,
     videoId: youtubeVideoId,
     initialTime: settings.autoResume && currentFile ? currentFile.lastPosition : 0,
+    initialVolume: volume,
     normalSpeed: normalSpeed,
     slowSpeed: settings.slowSpeed || 0.5,
     isSlowHeld: isSlowHeld,
@@ -776,10 +788,17 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     const clamped = Math.max(0, Math.min(newVol, 1));
     setVolume(clamped);
     setIsMuted(clamped === 0);
+    try {
+      localStorage.setItem('app_volume', String(clamped));
+    } catch (e) {}
+
     if (isYouTube) {
       ytPlayer.setVolume(clamped);
     } else if (mediaRef.current) {
       mediaRef.current.volume = clamped;
+    }
+    if (offlineAudioRef.current) {
+      offlineAudioRef.current.volume = clamped;
     }
   };
 
@@ -794,7 +813,7 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
     if (isMuted) {
       media.muted = false;
       setIsMuted(false);
-      media.volume = volume || 0.5;
+      media.volume = volume || 1.0;
     } else {
       media.muted = true;
       setIsMuted(true);
@@ -1179,24 +1198,40 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
 
                     {/* Quality Popup Menu */}
                     {isQualityMenuOpen && (
-                      <div className="absolute bottom-full mb-2.5 left-0 w-48 bg-[#16181f] border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in text-xs">
+                      <div className="absolute bottom-full mb-2.5 left-0 w-52 bg-[#16181f] border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in text-xs">
                         <div className="px-2 py-1 text-[9px] font-semibold text-fluent-text-muted uppercase tracking-wider border-b border-white/10 mb-1 flex items-center justify-between">
                           <span>Độ phân giải</span>
-                          <span className="text-red-400 font-normal">Tự động tối ưu</span>
+                          <span className="text-red-400 font-normal">Ưu tiên 1080p</span>
                         </div>
-                        {ytPlayer.availableQualities.length === 0 ? (
-                          <div className="px-2 py-1.5 text-[10px] text-fluent-text-muted">
-                            {getQualityDisplayName(ytPlayer.currentQuality)} (Tự động)
-                          </div>
-                        ) : (
-                          ytPlayer.availableQualities.map((q) => {
-                            const isCurrent = ytPlayer.currentQuality === q;
+                        {(() => {
+                          const standardQualities = [
+                            { id: 'hd1080', label: '1080p HD (Ưu tiên cao nhất)' },
+                            { id: 'hd720', label: '720p HD' },
+                            { id: 'large', label: '480p' },
+                            { id: 'medium', label: '360p' },
+                            { id: 'small', label: '240p' },
+                            { id: 'auto', label: 'Tự động (YouTube quyết định)' },
+                          ];
+
+                          const displayList =
+                            ytPlayer.availableQualities && ytPlayer.availableQualities.length > 0
+                              ? [
+                                  ...ytPlayer.availableQualities.map((q) => ({
+                                    id: q,
+                                    label: getQualityDisplayName(q) + (q === 'hd1080' ? ' (Ưu tiên)' : ''),
+                                  })),
+                                  { id: 'auto', label: 'Tự động' },
+                                ]
+                              : standardQualities;
+
+                          return displayList.map((item) => {
+                            const isCurrent = ytPlayer.currentQuality === item.id;
                             return (
                               <button
-                                key={q}
+                                key={item.id}
                                 type="button"
                                 onClick={() => {
-                                  ytPlayer.setQuality(q);
+                                  ytPlayer.setQuality(item.id);
                                   setIsQualityMenuOpen(false);
                                 }}
                                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[11px] transition-colors ${
@@ -1205,12 +1240,12 @@ export const PlayerView: React.FC<PlayerViewProps> = ({
                                     : 'text-fluent-text-secondary hover:text-white hover:bg-white/5'
                                 }`}
                               >
-                                <span>{getQualityDisplayName(q)}</span>
+                                <span>{item.label}</span>
                                 {isCurrent && <Check className="w-3.5 h-3.5 text-red-400" />}
                               </button>
                             );
-                          })
-                        )}
+                          });
+                        })()}
                       </div>
                     )}
                   </div>

@@ -32,7 +32,7 @@ func DefaultSettings() AppSettings {
 		AutoPlayNext:      false,
 		AutoResume:        true,
 		Theme:             "dark",
-		Volume:            0.9,
+		Volume:            1.0,
 		ShowSubtitles:     true,
 		ABLoopAutoRestart: true,
 	}

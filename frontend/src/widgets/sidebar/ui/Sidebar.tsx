@@ -107,6 +107,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const stopResizing = useCallback(() => {
     setIsResizing(false);
+    setSidebarWidth((current) => {
+      try {
+        localStorage.setItem('sidebar_width', String(current));
+      } catch (e) {}
+      return current;
+    });
   }, []);
 
   const resize = useCallback(
@@ -114,7 +120,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (isResizing) {
         const newWidth = Math.max(280, Math.min(600, e.clientX));
         setSidebarWidth(newWidth);
-        localStorage.setItem('sidebar_width', String(newWidth));
       }
     },
     [isResizing]
@@ -317,20 +322,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : activeFolderStat?.name || (activeFolder.split(/[\\/]/).filter(Boolean).pop() || 'Thư mục');
 
   return (
-    <aside
-      style={{ width: `${sidebarWidth}px` }}
-      className="shrink-0 h-full flex flex-col bg-fluent-bg-dark border-r border-white/5 select-none relative z-30"
-    >
-      {/* Resizer Handle */}
-      <div
-        onMouseDown={startResizing}
-        className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-fluent-accent/50 transition-colors z-40 group ${
-          isResizing ? 'bg-fluent-accent' : 'bg-transparent'
+    <>
+      {/* Fullscreen barrier during drag to prevent iframe / video pointer interception */}
+      {isResizing && (
+        <div
+          className="fixed inset-0 z-[999999] cursor-col-resize select-none bg-transparent"
+          onMouseMove={(e) => {
+            const newWidth = Math.max(280, Math.min(600, e.clientX));
+            setSidebarWidth(newWidth);
+          }}
+          onMouseUp={stopResizing}
+        />
+      )}
+
+      <aside
+        style={{ width: `${sidebarWidth}px` }}
+        className={`shrink-0 h-full flex flex-col bg-fluent-bg-dark border-r border-white/5 select-none relative z-30 ${
+          isResizing ? 'transition-none' : ''
         }`}
-        title="Kéo để thay đổi độ rộng thanh bên"
       >
-        <div className="absolute top-1/2 right-0.5 -translate-y-1/2 w-0.5 h-8 bg-white/20 rounded-full group-hover:bg-fluent-accent transition-colors" />
-      </div>
+        {/* Resizer Handle */}
+        <div
+          onMouseDown={startResizing}
+          onDoubleClick={() => {
+            setSidebarWidth(340);
+            try {
+              localStorage.setItem('sidebar_width', '340');
+            } catch (e) {}
+          }}
+          className={`absolute top-0 -right-2 w-4 h-full cursor-col-resize z-50 group flex items-center justify-center ${
+            isResizing ? 'pointer-events-none' : ''
+          }`}
+          title="Kéo để thay đổi độ rộng thanh bên (Nhấp đúp để đặt lại mặc định 340px)"
+        >
+          {/* Visual line */}
+          <div
+            className={`w-[2px] h-full transition-colors ${
+              isResizing
+                ? 'bg-fluent-accent shadow-[0_0_8px_rgba(96,165,250,0.8)]'
+                : 'bg-transparent group-hover:bg-fluent-accent/70'
+            }`}
+          />
+          {/* Center grip indicator */}
+          <div
+            className={`absolute top-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-all ${
+              isResizing
+                ? 'bg-fluent-accent scale-110'
+                : 'bg-white/20 group-hover:bg-fluent-accent group-hover:h-10'
+            }`}
+          />
+        </div>
 
       {/* App Header with Brand Logo (Clickable to return to Home/Welcome state) */}
       <div className="p-3 border-b border-white/5 flex items-center justify-between bg-fluent-bg-subtle/70">
@@ -1048,5 +1089,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <span className="text-neutral-500 font-mono">{currentFolderFiles.length} mục</span>
       </div>
     </aside>
+    </>
   );
 };

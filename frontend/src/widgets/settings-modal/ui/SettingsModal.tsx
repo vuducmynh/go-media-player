@@ -63,7 +63,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       autoPlayNext: false,
       autoResume: true,
       theme: 'dark',
-      volume: 0.9,
+      volume: 1.0,
       showSubtitles: true,
       abLoopAutoRestart: true,
     });

@@ -163,7 +163,7 @@ export const WailsBridge = {
       autoPlayNext: false,
       autoResume: true,
       theme: 'dark',
-      volume: 0.9,
+      volume: 1.0,
       showSubtitles: true,
       abLoopAutoRestart: true,
     };

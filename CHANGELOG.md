@@ -4,6 +4,27 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.10] - 21/09/2026
+
+# Khắc Phục Triệt Để Kẹt Kéo Thả Sidebar, Làm Chủ Độ Phân Giải YouTube 1080p & Mặc Định Âm Lượng Tối Đa 100%
+
+Bản cập nhật v1.3.10 tập trung tối ưu hóa sâu trải nghiệm người dùng (UX/UI): giải quyết triệt để lỗi kẹt khi kéo giãn Sidebar qua vùng phát Video/YouTube nhờ lớp bảo vệ con trỏ vô hình (Pointer Barrier Overlay), nâng cấp toàn diện cơ chế điều khiển chất lượng YouTube (mặc định ưu tiên 1080p HD, ép xả buffer để đổi chất lượng tức thì, menu chọn độ phân giải đầy đủ), và thiết lập âm lượng mặc định 100% kèm ghi nhớ vĩnh viễn trên toàn hệ thống.
+
+### Cải tiến & Khắc phục lỗi (3)
+- **Khắc phục triệt để lỗi kẹt kéo thả thanh bên (Sidebar Resizing Barrier)**:
+  - Bổ sung màn chắn con trỏ vô hình toàn màn hình (`Pointer Capture Overlay`) khi bắt đầu kéo: ngăn chặn 100% tình trạng sự kiện chuột (`mousemove`, `mouseup`) bị iframe YouTube hoặc video nuốt chửng khi con trỏ di chuyển qua.
+  - Tăng gấp đôi diện tích vùng chạm kéo thả (16px), bổ sung vạch căn giữa và mốc định vị trực quan; thêm tính năng **nhấp đúp chuột** (`double click`) vào thanh trượt để đặt lại ngay về độ rộng tiêu chuẩn 340px.
+  - Tách biệt hoàn toàn việc lưu trữ `localStorage` khỏi sự kiện kéo thả pixel, loại bỏ hiện tượng giật lag khung hình khi di chuyển chuột.
+- **Làm chủ chất lượng video YouTube & Ưu tiên sắc nét 1080p**:
+  - Tự động áp dụng chất lượng 1080p (`hd1080`) ngay khi mở bất kỳ video YouTube nào; ghi nhớ vĩnh viễn lựa chọn độ phân giải của người dùng qua các lần sử dụng.
+  - Khắc phục cơ chế đệm thích ứng DASH của YouTube: khi người dùng chọn độ phân giải mới, hệ thống tự động gọi lệnh ép xả hàng đợi đệm (`buffer flush seekTo`), buộc YouTube phải tải ngay phân đoạn video ở chất lượng mới thay vì tiếp tục phát 30 giây độ phân giải cũ đã nạp sẵn.
+  - Nâng cấp menu tùy chọn độ phân giải: luôn cung cấp đầy đủ các chuẩn chất lượng (1080p HD, 720p HD, 480p, 360p, 240p, Tự động) để người dùng chủ động lựa chọn bất cứ lúc nào.
+- **Mặc định âm lượng tối đa 100% (1.0) & Ghi nhớ âm lượng toàn diện**:
+  - Thiết lập âm lượng mặc định 100% trên toàn bộ hệ thống (từ tầng Backend Go, cấu hình ứng dụng, trình phát tệp cục bộ đến trình phát YouTube và audio ngoại tuyến).
+  - Tự động đồng bộ và ghi nhớ mức âm lượng người dùng điều chỉnh vào bộ nhớ vĩnh viễn `app_volume`, không còn tình trạng âm thanh bị nhỏ hoặc reset về mức cũ sau khi mở lại ứng dụng.
+
+---
+
 ## [v1.3.9] - 21/09/2026
 
 # Khắc Phục Triệt Để Tách Rời Cụm Phụ Âm (wr, kn, cl, tr...), Chống Cắt Vụn Câu & Bảo Vệ Định Dạng Số / Tiền Tệ
