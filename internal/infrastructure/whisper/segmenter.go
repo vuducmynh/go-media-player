@@ -1002,167 +1002,174 @@ func shouldStitch(s1, s2 study.Sentence) bool {
 		return false
 	}
 
-	// 2. Length safety checks for study dictation mode
 	w1 := strings.Fields(s1.Transcript)
 	w2 := strings.Fields(s2.Transcript)
-	if len(w1)+len(w2) > 35 {
-		return false
-	}
-	combinedDur := s2.EndMs - s1.StartMs
-	if combinedDur > 28000 {
+	if len(w1) == 0 || len(w2) == 0 {
 		return false
 	}
 
-	// 3. Primary trigger: s1 ends with dangling or incomplete phrase
+	// 2. Identify if there is a strong syntactic, grammatical, or phrase link
+	isLinked := false
+	isShortOrphan := len(w2) <= 7 || (s2.EndMs-s2.StartMs) <= 3200
+
+	// 2a. Primary trigger: s1 ends with dangling or incomplete phrase
 	if isDanglingOrIncomplete(s1.Transcript) {
-		return true
+		isLinked = true
 	}
 
-	// 4. Secondary trigger: s2 is an orphan fragment or continuation of s1
-	if len(w2) == 0 {
-		return false
-	}
 	firstWordS2 := strings.ToLower(strings.Trim(w2[0], " \t\r\n.,;?!\"'()[]"))
 
 	// Case A: s2 starts with lowercase letter (clear syntax continuity)
 	runesS2 := []rune(strings.TrimSpace(s2.Transcript))
 	if len(runesS2) > 0 && unicode.IsLower(runesS2[0]) {
-		return true
+		isLinked = true
 	}
 
 	// Case B: s2 starts with copula/auxiliary: "is", "are", "was", "were", "be", "been"
-	// e.g. "You will see that there." + "Is an example which has been done for you."
 	if firstWordS2 == "is" || firstWordS2 == "are" || firstWordS2 == "was" || firstWordS2 == "were" {
-		lastWordS1 := ""
-		if len(w1) > 0 {
-			lastWordS1 = strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
-		}
+		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
 		if lastWordS1 == "there" || lastWordS1 == "it" || lastWordS1 == "this" || lastWordS1 == "that" || lastWordS1 == "here" {
-			return true
+			isLinked = true
 		}
 	}
 
-	// Case C: s2 starts with preposition range or orphan prepositional phrase:
-	// e.g. "answer questions 15." + "To 20."
-	// e.g. "...spending just one hour a day on some activities." + "For the next term."
+	// Case C: s2 starts with preposition range or orphan prepositional phrase
 	if firstWordS2 == "to" && len(w2) >= 2 {
 		r := []rune(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]"))
 		if len(r) > 0 && unicode.IsDigit(r[0]) {
-			return true
+			isLinked = true
 		}
 	}
 	if (firstWordS2 == "for" || firstWordS2 == "with" || firstWordS2 == "in" || firstWordS2 == "on" || firstWordS2 == "at" || firstWordS2 == "about" || firstWordS2 == "from") && len(w2) <= 5 {
-		return true
+		isLinked = true
 	}
 
 	// Case D: s2 starts with relative clause pronoun: "that", "which", "who", "whom", "whose", "where"
-	// e.g. "Relaxation and other activities." + "That you enjoy."
 	if firstWordS2 == "that" || firstWordS2 == "which" || firstWordS2 == "whom" {
-		return true
+		isLinked = true
 	}
 
 	// Case E: s2 starts with participle: "written", "working", "recording", "continues", "carrying", "cautious"
-	// e.g. "so that has been." + "Written on the form."
-	// e.g. "Is this microphone." + "Working? Good."
-	// e.g. "Before the talk." + "Continues, you will have..."
 	switch firstWordS2 {
 	case "written", "working", "recording", "continues", "carry", "carrying", "cautious", "notice":
-		return true
+		isLinked = true
 	}
 
 	// Case F: s2 starts with verb completing modal/auxiliary in s1
-	// e.g. "You will now." + "Have half a minute to check your answers."
 	if firstWordS2 == "have" || firstWordS2 == "check" || firstWordS2 == "answer" {
 		lastTwoS1 := ""
 		if len(w1) >= 2 {
 			lastTwoS1 = strings.ToLower(strings.Trim(w1[len(w1)-2], " \t\r\n.,;?!\"'()[]") + " " + strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
 		}
 		if strings.HasSuffix(lastTwoS1, " will now") || strings.HasSuffix(lastTwoS1, " would now") || strings.HasSuffix(lastTwoS1, " will") || strings.HasSuffix(lastTwoS1, " would") || strings.HasSuffix(lastTwoS1, " should") {
-			return true
+			isLinked = true
 		}
 	}
 
 	// Case G: Title/Compound continuation
-	// e.g. "section 1 of Listening Practice." + "Test. Section 1."
-	if len(w1) > 0 {
-		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
-		if lastWordS1 == "practice" && firstWordS2 == "test" {
-			return true
-		}
-		if lastWordS1 == "transport" && firstWordS2 == "authority" {
-			return true
-		}
+	lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+	if (lastWordS1 == "practice" && firstWordS2 == "test") || (lastWordS1 == "transport" && firstWordS2 == "authority") {
+		isLinked = true
 	}
 
 	// Case H: s1 ends with hyphenated compound adjective (e.g. "my first five-week." + "Course right...")
-	if len(w1) > 0 {
-		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
-		if strings.Contains(lastWordS1, "-") {
-			parts := strings.Split(lastWordS1, "-")
-			lastPart := parts[len(parts)-1]
-			switch lastPart {
-			case "week", "weeks", "day", "days", "year", "years", "month", "months", "hour", "hours", "minute", "minutes", "time", "part", "class", "level", "term":
-				return true
-			}
+	if strings.Contains(lastWordS1, "-") {
+		parts := strings.Split(lastWordS1, "-")
+		lastPart := parts[len(parts)-1]
+		switch lastPart {
+		case "week", "weeks", "day", "days", "year", "years", "month", "months", "hour", "hours", "minute", "minutes", "time", "part", "class", "level", "term":
+			isLinked = true
 		}
 	}
 
 	// Case I: s1 ends with attributive adjective (e.g. "consulates in neighbouring." + "Countries require...")
-	if len(w1) > 0 {
-		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
-		if lastWordS1 == "neighbouring" || lastWordS1 == "neighboring" || lastWordS1 == "surrounding" {
-			return true
-		}
+	if lastWordS1 == "neighbouring" || lastWordS1 == "neighboring" || lastWordS1 == "surrounding" {
+		isLinked = true
 	}
 
 	// Case J: s2 starts with to-infinitive following aspectual verbs in s1 (e.g. "...when people start." + "To look a bit stressed.")
-	if firstWordS2 == "to" && len(w2) >= 2 && len(w1) > 0 {
-		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+	if firstWordS2 == "to" && len(w2) >= 2 {
 		switch lastWordS1 {
 		case "start", "started", "starting", "begin", "began", "begins", "beginning", "continue", "continued", "tend", "tends", "tended", "manage", "managed", "try", "tried", "plan", "planned", "fail", "failed", "attempt", "attempted", "hope", "hoped":
-			return true
+			isLinked = true
 		}
 	}
 
 	// Case K: s1 ends with subject + transitive verb needing direct object in s2
-	// e.g. "...mainly because they have." + "An assignment to do."
-	// e.g. "Check whether you need..." + "A multiple entry visa..."
 	if len(w1) >= 2 && (firstWordS2 == "a" || firstWordS2 == "an" || firstWordS2 == "the" || firstWordS2 == "some" || firstWordS2 == "any") {
 		lastTwoS1 := strings.ToLower(strings.Trim(w1[len(w1)-2], " \t\r\n.,;?!\"'()[]") + " " + strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
 		switch lastTwoS1 {
 		case "they have", "we have", "you have", "i have", "you need", "we need", "they need", "i need", "they require", "we require":
-			return true
+			isLinked = true
 		}
 	}
 
 	// Case L: Conversational filler "you know" split across sentences
 	// e.g. "...colleagues from work, you." + "Know, in our lunch hour."
-	if len(w1) > 0 {
-		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
-		if lastWordS1 == "you" && firstWordS2 == "know" {
-			return true
-		}
+	if lastWordS1 == "you" && firstWordS2 == "know" {
+		isLinked = true
 	}
 
-	// Case M: Compound noun continuation (e.g. "...how to use the library." + "Computer system, and so on today...")
-	if len(w1) > 0 {
-		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
-		if lastWordS1 == "library" && (firstWordS2 == "computer" || firstWordS2 == "catalog" || firstWordS2 == "catalogue") {
-			return true
-		}
+	// Case M: Compound noun continuation (e.g. "...use the library." + "Computer system...", "...have a book." + "List here...")
+	if (lastWordS1 == "library" && (firstWordS2 == "computer" || firstWordS2 == "catalog" || firstWordS2 == "catalogue")) ||
+		(lastWordS1 == "book" && (firstWordS2 == "list" || firstWordS2 == "lists" || firstWordS2 == "store" || firstWordS2 == "shop")) ||
+		(lastWordS1 == "time" && firstWordS2 == "management") {
+		isLinked = true
 	}
 
 	// Case N: IELTS instructions prompt: "As you listen to ..., complete/answer..."
-	// e.g. "As you listen to the rest of the conversation,." + "Complete the form by filling in..."
 	s1Lower := strings.ToLower(s1.Transcript)
 	if strings.HasPrefix(s1Lower, "as you listen") {
 		switch firstWordS2 {
 		case "complete", "answer", "fill", "choose", "write", "check":
-			return true
+			isLinked = true
 		}
 	}
 
-	return false
+	// Case O: Linking verb predicate complement continuation:
+	// e.g. "...when people start to look." + "A bit stressed."
+	switch lastWordS1 {
+	case "look", "looks", "looking", "looked", "feel", "feels", "feeling", "felt", "seem", "seems", "seemed", "sound", "sounds", "sounded", "become", "becomes", "became":
+		switch firstWordS2 {
+		case "a", "an", "the", "bit", "very", "quite", "extremely", "stressed", "tired", "happy", "sad", "angry", "different", "difficult", "like":
+			isLinked = true
+		}
+	}
+
+	// Case P: Relative clause / subject predicate continuation:
+	// e.g. "...consulates in neighbouring countries." + "Require you to provide a letter..."
+	if (lastWordS1 == "countries" || lastWordS1 == "consulates" || lastWordS1 == "embassy" || lastWordS1 == "officers" || lastWordS1 == "students" || lastWordS1 == "people") &&
+		(firstWordS2 == "require" || firstWordS2 == "need" || firstWordS2 == "provide" || firstWordS2 == "ask") {
+		isLinked = true
+	}
+
+	if !isLinked {
+		return false
+	}
+
+	// 3. Dynamic Length Safety Limits based on link nature
+	maxWords := 35
+	maxDur := int64(28000)
+
+	if isShortOrphan {
+		// When s2 is an orphan fragment (<= 7 words), expand limit to prevent amputating sentence tails
+		maxWords = 48
+		maxDur = 32000
+	} else if isDanglingOrIncomplete(s1.Transcript) || firstWordS2 == "require" || firstWordS2 == "need" {
+		// When s1 is dangling or completing a relative clause predicate
+		maxWords = 52
+		maxDur = 32000
+	}
+
+	if len(w1)+len(w2) > maxWords {
+		return false
+	}
+	combinedDur := s2.EndMs - s1.StartMs
+	if combinedDur > maxDur {
+		return false
+	}
+
+	return true
 }
 
 // mergeTwoSentences fuses two fragmented sentences into a single coherent sentence

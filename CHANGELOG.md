@@ -4,6 +4,23 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.13] - 21/09/2026
+
+# Mở Khóa Độ Dài Linh Hoạt Cho Mẩu Câu Mồ Côi & Bảo Tồn Toàn Vẹn Cú Pháp Câu Luyện Nghe
+
+Bản cập nhật v1.3.13 mở khóa nút thắt cổ chai độ dài cơ học (Dynamic Orphan Threshold), bảo tồn 100% các quy tắc ngữ pháp đã kiểm chứng, cho phép tự động khâu liền các mẩu câu mồ côi (orphans <= 7 từ) và mệnh đề quan hệ dở dang trong các câu nói dài, mang lại trải nghiệm luyện nghe và chép chính tả trọn vẹn tuyệt đối.
+
+### Cải tiến (2)
+- **Mở khóa trần độ dài linh hoạt (Dynamic Orphan Threshold)**: Nới lỏng trần khống chế độ dài từ 35 từ lên 48–52 từ khi câu kế tiếp là mẩu cụt mồ côi (`len(w2) <= 7`) hoặc là vị ngữ hoàn thiện mệnh đề quan hệ. Điều này giải phóng toàn bộ các quy tắc cú pháp đã có mà không bao giờ gộp nhầm các câu thoại ngắn độc lập.
+- **Bổ sung liên kết vị từ và danh từ ghép hoàn chỉnh**: Nhận diện tự nhiên các liên kết giữa vị từ (look/seem/feel + tính từ bổ ngữ như "a bit stressed"), cụm từ hội thoại ("you know") và danh từ ghép ("book list", "time management").
+
+### Sửa lỗi (1)
+- **Khắc phục triệt để hiện tượng ngắt cụt đuôi câu dài**: Khâu liền mạch hoàn hảo 4 vị trí câu phức dài còn sót lại trong các bài thi và bài giảng học thuật (`...when people start to look a bit stressed.`, `...as I have a book list here...`, `...you know, in our lunch hour.`, `...countries require you to provide...`).
+
+### Bản vá (0)
+
+---
+
 ## [v1.3.12] - 21/09/2026
 
 # Hoàn Thiện Tinh Tế Thuật Toán Phân Đoạn, Xử Lý Triệt Để 9 Trường Hợp Biên Cắt Vụn & Làm Sạch Dấu Câu Kép

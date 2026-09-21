@@ -816,6 +816,278 @@ func TestProcessSegmentsSentenceStitcher(t *testing.T) {
 	if res11[0].Transcript != expected11 {
 		t.Errorf("Test 11 transcript = %q, want %q", res11[0].Transcript, expected11)
 	}
+
+	// Test 12: Long sentence (37 words) ending in linking verb + short orphan (3 words): "...start to look." + "A bit stressed."
+	raw12 := []WhisperSegment{
+		{
+			Text:    "If you look around you at college you will see that during the first weeks of the term everyone looks cheerful and focused, followed by a change around week six, assignment time, when people start to look.",
+			Offsets: WhisperOffsets{From: 110000, To: 121000},
+			Tokens: []WhisperToken{
+				{Text: "If", Offsets: WhisperOffsets{From: 110000, To: 110300}},
+				{Text: " you", Offsets: WhisperOffsets{From: 110300, To: 110500}},
+				{Text: " look", Offsets: WhisperOffsets{From: 110500, To: 110800}},
+				{Text: " around", Offsets: WhisperOffsets{From: 110800, To: 111100}},
+				{Text: " you", Offsets: WhisperOffsets{From: 111100, To: 111300}},
+				{Text: " at", Offsets: WhisperOffsets{From: 111300, To: 111500}},
+				{Text: " college", Offsets: WhisperOffsets{From: 111500, To: 111800}},
+				{Text: " you", Offsets: WhisperOffsets{From: 111800, To: 112000}},
+				{Text: " will", Offsets: WhisperOffsets{From: 112000, To: 112200}},
+				{Text: " see", Offsets: WhisperOffsets{From: 112200, To: 112500}},
+				{Text: " that", Offsets: WhisperOffsets{From: 112500, To: 112700}},
+				{Text: " during", Offsets: WhisperOffsets{From: 112700, To: 113000}},
+				{Text: " the", Offsets: WhisperOffsets{From: 113000, To: 113200}},
+				{Text: " first", Offsets: WhisperOffsets{From: 113200, To: 113500}},
+				{Text: " weeks", Offsets: WhisperOffsets{From: 113500, To: 113800}},
+				{Text: " of", Offsets: WhisperOffsets{From: 113800, To: 114000}},
+				{Text: " the", Offsets: WhisperOffsets{From: 114000, To: 114200}},
+				{Text: " term", Offsets: WhisperOffsets{From: 114200, To: 114500}},
+				{Text: " everyone", Offsets: WhisperOffsets{From: 114500, To: 115000}},
+				{Text: " looks", Offsets: WhisperOffsets{From: 115000, To: 115300}},
+				{Text: " cheerful", Offsets: WhisperOffsets{From: 115300, To: 115800}},
+				{Text: " and", Offsets: WhisperOffsets{From: 115800, To: 116000}},
+				{Text: " focused,", Offsets: WhisperOffsets{From: 116000, To: 116500}},
+				{Text: " followed", Offsets: WhisperOffsets{From: 116500, To: 117000}},
+				{Text: " by", Offsets: WhisperOffsets{From: 117000, To: 117200}},
+				{Text: " a", Offsets: WhisperOffsets{From: 117200, To: 117400}},
+				{Text: " change", Offsets: WhisperOffsets{From: 117400, To: 117800}},
+				{Text: " around", Offsets: WhisperOffsets{From: 117800, To: 118200}},
+				{Text: " week", Offsets: WhisperOffsets{From: 118200, To: 118500}},
+				{Text: " six,", Offsets: WhisperOffsets{From: 118500, To: 119000}},
+				{Text: " assignment", Offsets: WhisperOffsets{From: 119000, To: 119500}},
+				{Text: " time,", Offsets: WhisperOffsets{From: 119500, To: 120000}},
+				{Text: " when", Offsets: WhisperOffsets{From: 120000, To: 120300}},
+				{Text: " people", Offsets: WhisperOffsets{From: 120300, To: 120600}},
+				{Text: " start", Offsets: WhisperOffsets{From: 120600, To: 120800}},
+				{Text: " to", Offsets: WhisperOffsets{From: 120800, To: 121000}},
+				{Text: " look.", Offsets: WhisperOffsets{From: 121000, To: 121500}},
+			},
+		},
+		{
+			Text:    "A bit stressed.",
+			Offsets: WhisperOffsets{From: 121700, To: 122600},
+			Tokens: []WhisperToken{
+				{Text: "A", Offsets: WhisperOffsets{From: 121700, To: 121900}},
+				{Text: " bit", Offsets: WhisperOffsets{From: 121900, To: 122200}},
+				{Text: " stressed.", Offsets: WhisperOffsets{From: 122200, To: 122600}},
+			},
+		},
+	}
+	res12 := segmenter.ProcessSegments(raw12)
+	if len(res12) != 1 {
+		t.Fatalf("Test 12 expected 1 stitched sentence, got %d: %+v", len(res12), res12)
+	}
+	expected12 := "If you look around you at college you will see that during the first weeks of the term everyone looks cheerful and focused, followed by a change around week six, assignment time, when people start to look a bit stressed."
+	if res12[0].Transcript != expected12 {
+		t.Errorf("Test 12 transcript = %q, want %q", res12[0].Transcript, expected12)
+	}
+
+	// Test 13: 35-word sentence ending in "you." + "Know, in our lunch hour."
+	raw13 := []WhisperSegment{
+		{
+			Text:    "I usually go shopping on my own, but if I want to make it more of a social occasion with friends to have a coffee and things, I often go with colleagues from work, you.",
+			Offsets: WhisperOffsets{From: 130000, To: 138000},
+			Tokens: []WhisperToken{
+				{Text: "I", Offsets: WhisperOffsets{From: 130000, To: 130200}},
+				{Text: " usually", Offsets: WhisperOffsets{From: 130200, To: 130500}},
+				{Text: " go", Offsets: WhisperOffsets{From: 130500, To: 130700}},
+				{Text: " shopping", Offsets: WhisperOffsets{From: 130700, To: 131000}},
+				{Text: " on", Offsets: WhisperOffsets{From: 131000, To: 131200}},
+				{Text: " my", Offsets: WhisperOffsets{From: 131200, To: 131400}},
+				{Text: " own,", Offsets: WhisperOffsets{From: 131400, To: 131700}},
+				{Text: " but", Offsets: WhisperOffsets{From: 131700, To: 132000}},
+				{Text: " if", Offsets: WhisperOffsets{From: 132000, To: 132200}},
+				{Text: " I", Offsets: WhisperOffsets{From: 132200, To: 132400}},
+				{Text: " want", Offsets: WhisperOffsets{From: 132400, To: 132700}},
+				{Text: " to", Offsets: WhisperOffsets{From: 132700, To: 132900}},
+				{Text: " make", Offsets: WhisperOffsets{From: 132900, To: 133200}},
+				{Text: " it", Offsets: WhisperOffsets{From: 133200, To: 133400}},
+				{Text: " more", Offsets: WhisperOffsets{From: 133400, To: 133700}},
+				{Text: " of", Offsets: WhisperOffsets{From: 133700, To: 133900}},
+				{Text: " a", Offsets: WhisperOffsets{From: 133900, To: 134100}},
+				{Text: " social", Offsets: WhisperOffsets{From: 134100, To: 134400}},
+				{Text: " occasion", Offsets: WhisperOffsets{From: 134400, To: 134800}},
+				{Text: " with", Offsets: WhisperOffsets{From: 134800, To: 135000}},
+				{Text: " friends", Offsets: WhisperOffsets{From: 135000, To: 135400}},
+				{Text: " to", Offsets: WhisperOffsets{From: 135400, To: 135600}},
+				{Text: " have", Offsets: WhisperOffsets{From: 135600, To: 135800}},
+				{Text: " a", Offsets: WhisperOffsets{From: 135800, To: 136000}},
+				{Text: " coffee", Offsets: WhisperOffsets{From: 136000, To: 136400}},
+				{Text: " and", Offsets: WhisperOffsets{From: 136400, To: 136600}},
+				{Text: " things,", Offsets: WhisperOffsets{From: 136600, To: 137000}},
+				{Text: " I", Offsets: WhisperOffsets{From: 137000, To: 137200}},
+				{Text: " often", Offsets: WhisperOffsets{From: 137200, To: 137400}},
+				{Text: " go", Offsets: WhisperOffsets{From: 137400, To: 137600}},
+				{Text: " with", Offsets: WhisperOffsets{From: 137600, To: 137800}},
+				{Text: " colleagues", Offsets: WhisperOffsets{From: 137800, To: 138100}},
+				{Text: " from", Offsets: WhisperOffsets{From: 138100, To: 138300}},
+				{Text: " work,", Offsets: WhisperOffsets{From: 138300, To: 138600}},
+				{Text: " you.", Offsets: WhisperOffsets{From: 138600, To: 139000}},
+			},
+		},
+		{
+			Text:    "Know, in our lunch hour.",
+			Offsets: WhisperOffsets{From: 139200, To: 140000},
+			Tokens: []WhisperToken{
+				{Text: "Know,", Offsets: WhisperOffsets{From: 139200, To: 139500}},
+				{Text: " in", Offsets: WhisperOffsets{From: 139500, To: 139600}},
+				{Text: " our", Offsets: WhisperOffsets{From: 139600, To: 139700}},
+				{Text: " lunch", Offsets: WhisperOffsets{From: 139700, To: 139900}},
+				{Text: " hour.", Offsets: WhisperOffsets{From: 139900, To: 140000}},
+			},
+		},
+	}
+	res13 := segmenter.ProcessSegments(raw13)
+	if len(res13) != 1 {
+		t.Fatalf("Test 13 expected 1 stitched sentence, got %d: %+v", len(res13), res13)
+	}
+	expected13 := "I usually go shopping on my own, but if I want to make it more of a social occasion with friends to have a coffee and things, I often go with colleagues from work, you know, in our lunch hour."
+	if res13[0].Transcript != expected13 {
+		t.Errorf("Test 13 transcript = %q, want %q", res13[0].Transcript, expected13)
+	}
+
+	// Test 14: 38-word sentence ending in "...have a book." + "List here and some other useful materials."
+	raw14 := []WhisperSegment{
+		{
+			Text:    "Hundreds of books have been written about time management, and those of you who are interested in doing some extra reading on the subject are very welcome to see me after the lecture, as I have a book.",
+			Offsets: WhisperOffsets{From: 150000, To: 161000},
+			Tokens: []WhisperToken{
+				{Text: "Hundreds", Offsets: WhisperOffsets{From: 150000, To: 150500}},
+				{Text: " of", Offsets: WhisperOffsets{From: 150500, To: 150700}},
+				{Text: " books", Offsets: WhisperOffsets{From: 150700, To: 151000}},
+				{Text: " have", Offsets: WhisperOffsets{From: 151000, To: 151200}},
+				{Text: " been", Offsets: WhisperOffsets{From: 151200, To: 151400}},
+				{Text: " written", Offsets: WhisperOffsets{From: 151400, To: 151700}},
+				{Text: " about", Offsets: WhisperOffsets{From: 151700, To: 152000}},
+				{Text: " time", Offsets: WhisperOffsets{From: 152000, To: 152300}},
+				{Text: " management,", Offsets: WhisperOffsets{From: 152300, To: 152800}},
+				{Text: " and", Offsets: WhisperOffsets{From: 152800, To: 153000}},
+				{Text: " those", Offsets: WhisperOffsets{From: 153000, To: 153300}},
+				{Text: " of", Offsets: WhisperOffsets{From: 153300, To: 153500}},
+				{Text: " you", Offsets: WhisperOffsets{From: 153500, To: 153700}},
+				{Text: " who", Offsets: WhisperOffsets{From: 153700, To: 153900}},
+				{Text: " are", Offsets: WhisperOffsets{From: 153900, To: 154100}},
+				{Text: " interested", Offsets: WhisperOffsets{From: 154100, To: 154500}},
+				{Text: " in", Offsets: WhisperOffsets{From: 154500, To: 154700}},
+				{Text: " doing", Offsets: WhisperOffsets{From: 154700, To: 155000}},
+				{Text: " some", Offsets: WhisperOffsets{From: 155000, To: 155200}},
+				{Text: " extra", Offsets: WhisperOffsets{From: 155200, To: 155500}},
+				{Text: " reading", Offsets: WhisperOffsets{From: 155500, To: 155800}},
+				{Text: " on", Offsets: WhisperOffsets{From: 155800, To: 156000}},
+				{Text: " the", Offsets: WhisperOffsets{From: 156000, To: 156200}},
+				{Text: " subject", Offsets: WhisperOffsets{From: 156200, To: 156500}},
+				{Text: " are", Offsets: WhisperOffsets{From: 156500, To: 156700}},
+				{Text: " very", Offsets: WhisperOffsets{From: 156700, To: 157000}},
+				{Text: " welcome", Offsets: WhisperOffsets{From: 157000, To: 157300}},
+				{Text: " to", Offsets: WhisperOffsets{From: 157300, To: 157500}},
+				{Text: " see", Offsets: WhisperOffsets{From: 157500, To: 157700}},
+				{Text: " me", Offsets: WhisperOffsets{From: 157700, To: 157900}},
+				{Text: " after", Offsets: WhisperOffsets{From: 157900, To: 158200}},
+				{Text: " the", Offsets: WhisperOffsets{From: 158200, To: 158400}},
+				{Text: " lecture,", Offsets: WhisperOffsets{From: 158400, To: 158800}},
+				{Text: " as", Offsets: WhisperOffsets{From: 158800, To: 159000}},
+				{Text: " I", Offsets: WhisperOffsets{From: 159000, To: 159200}},
+				{Text: " have", Offsets: WhisperOffsets{From: 159200, To: 159500}},
+				{Text: " a", Offsets: WhisperOffsets{From: 159500, To: 159700}},
+				{Text: " book.", Offsets: WhisperOffsets{From: 159700, To: 160000}},
+			},
+		},
+		{
+			Text:    "List here and some other useful materials.",
+			Offsets: WhisperOffsets{From: 160200, To: 164000},
+			Tokens: []WhisperToken{
+				{Text: "List", Offsets: WhisperOffsets{From: 160200, To: 160500}},
+				{Text: " here", Offsets: WhisperOffsets{From: 160500, To: 160800}},
+				{Text: " and", Offsets: WhisperOffsets{From: 160800, To: 161000}},
+				{Text: " some", Offsets: WhisperOffsets{From: 161000, To: 161300}},
+				{Text: " other", Offsets: WhisperOffsets{From: 161300, To: 161600}},
+				{Text: " useful", Offsets: WhisperOffsets{From: 161600, To: 162000}},
+				{Text: " materials.", Offsets: WhisperOffsets{From: 162000, To: 164000}},
+			},
+		},
+	}
+	res14 := segmenter.ProcessSegments(raw14)
+	if len(res14) != 1 {
+		t.Fatalf("Test 14 expected 1 stitched sentence, got %d: %+v", len(res14), res14)
+	}
+	expected14 := "Hundreds of books have been written about time management, and those of you who are interested in doing some extra reading on the subject are very welcome to see me after the lecture, as I have a book list here and some other useful materials."
+	if res14[0].Transcript != expected14 {
+		t.Errorf("Test 14 transcript = %q, want %q", res14[0].Transcript, expected14)
+	}
+
+	// Test 15: Relative clause predicate on 36-word sentence ("...in neighbouring countries." + "Require you to provide a letter...")
+	raw15 := []WhisperSegment{
+		{
+			Text:    "Now, for those of you who are intending to take Esnia as part of a longer tour and want to wait till you get to another country, do remember that some Esnian consulates in neighbouring countries.",
+			Offsets: WhisperOffsets{From: 170000, To: 181000},
+			Tokens: []WhisperToken{
+				{Text: "Now,", Offsets: WhisperOffsets{From: 170000, To: 170300}},
+				{Text: " for", Offsets: WhisperOffsets{From: 170300, To: 170500}},
+				{Text: " those", Offsets: WhisperOffsets{From: 170500, To: 170800}},
+				{Text: " of", Offsets: WhisperOffsets{From: 170800, To: 171000}},
+				{Text: " you", Offsets: WhisperOffsets{From: 171000, To: 171200}},
+				{Text: " who", Offsets: WhisperOffsets{From: 171200, To: 171400}},
+				{Text: " are", Offsets: WhisperOffsets{From: 171400, To: 171600}},
+				{Text: " intending", Offsets: WhisperOffsets{From: 171600, To: 172000}},
+				{Text: " to", Offsets: WhisperOffsets{From: 172000, To: 172200}},
+				{Text: " take", Offsets: WhisperOffsets{From: 172200, To: 172500}},
+				{Text: " Esnia", Offsets: WhisperOffsets{From: 172500, To: 172800}},
+				{Text: " as", Offsets: WhisperOffsets{From: 172800, To: 173000}},
+				{Text: " part", Offsets: WhisperOffsets{From: 173000, To: 173300}},
+				{Text: " of", Offsets: WhisperOffsets{From: 173300, To: 173500}},
+				{Text: " a", Offsets: WhisperOffsets{From: 173500, To: 173700}},
+				{Text: " longer", Offsets: WhisperOffsets{From: 173700, To: 174000}},
+				{Text: " tour", Offsets: WhisperOffsets{From: 174000, To: 174300}},
+				{Text: " and", Offsets: WhisperOffsets{From: 174300, To: 174500}},
+				{Text: " want", Offsets: WhisperOffsets{From: 174500, To: 174800}},
+				{Text: " to", Offsets: WhisperOffsets{From: 174800, To: 175000}},
+				{Text: " wait", Offsets: WhisperOffsets{From: 175000, To: 175300}},
+				{Text: " till", Offsets: WhisperOffsets{From: 175300, To: 175500}},
+				{Text: " you", Offsets: WhisperOffsets{From: 175500, To: 175700}},
+				{Text: " get", Offsets: WhisperOffsets{From: 175700, To: 176000}},
+				{Text: " to", Offsets: WhisperOffsets{From: 176000, To: 176200}},
+				{Text: " another", Offsets: WhisperOffsets{From: 176200, To: 176500}},
+				{Text: " country,", Offsets: WhisperOffsets{From: 176500, To: 176800}},
+				{Text: " do", Offsets: WhisperOffsets{From: 176800, To: 177000}},
+				{Text: " remember", Offsets: WhisperOffsets{From: 177000, To: 177400}},
+				{Text: " that", Offsets: WhisperOffsets{From: 177400, To: 177600}},
+				{Text: " some", Offsets: WhisperOffsets{From: 177600, To: 177800}},
+				{Text: " Esnian", Offsets: WhisperOffsets{From: 177800, To: 178200}},
+				{Text: " consulates", Offsets: WhisperOffsets{From: 178200, To: 178600}},
+				{Text: " in", Offsets: WhisperOffsets{From: 178600, To: 178800}},
+				{Text: " neighbouring", Offsets: WhisperOffsets{From: 178800, To: 179300}},
+				{Text: " countries.", Offsets: WhisperOffsets{From: 179300, To: 180000}},
+			},
+		},
+		{
+			Text:    "Require you to provide a letter from your own embassy, just to confirm your nationality.",
+			Offsets: WhisperOffsets{From: 180200, To: 185000},
+			Tokens: []WhisperToken{
+				{Text: "Require", Offsets: WhisperOffsets{From: 180200, To: 180600}},
+				{Text: " you", Offsets: WhisperOffsets{From: 180600, To: 180800}},
+				{Text: " to", Offsets: WhisperOffsets{From: 180800, To: 181000}},
+				{Text: " provide", Offsets: WhisperOffsets{From: 181000, To: 181400}},
+				{Text: " a", Offsets: WhisperOffsets{From: 181400, To: 181600}},
+				{Text: " letter", Offsets: WhisperOffsets{From: 181600, To: 182000}},
+				{Text: " from", Offsets: WhisperOffsets{From: 182000, To: 182200}},
+				{Text: " your", Offsets: WhisperOffsets{From: 182200, To: 182400}},
+				{Text: " own", Offsets: WhisperOffsets{From: 182400, To: 182600}},
+				{Text: " embassy,", Offsets: WhisperOffsets{From: 182600, To: 183000}},
+				{Text: " just", Offsets: WhisperOffsets{From: 183000, To: 183300}},
+				{Text: " to", Offsets: WhisperOffsets{From: 183300, To: 183500}},
+				{Text: " confirm", Offsets: WhisperOffsets{From: 183500, To: 184000}},
+				{Text: " your", Offsets: WhisperOffsets{From: 184000, To: 184200}},
+				{Text: " nationality.", Offsets: WhisperOffsets{From: 184200, To: 185000}},
+			},
+		},
+	}
+	res15 := segmenter.ProcessSegments(raw15)
+	if len(res15) != 1 {
+		t.Fatalf("Test 15 expected 1 stitched sentence, got %d: %+v", len(res15), res15)
+	}
+	expected15 := "Now, for those of you who are intending to take Esnia as part of a longer tour and want to wait till you get to another country, do remember that some Esnian consulates in neighbouring countries require you to provide a letter from your own embassy, just to confirm your nationality."
+	if res15[0].Transcript != expected15 {
+		t.Errorf("Test 15 transcript = %q, want %q", res15[0].Transcript, expected15)
+	}
 }
 
 
