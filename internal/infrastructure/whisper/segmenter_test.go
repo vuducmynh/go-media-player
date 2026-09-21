@@ -359,6 +359,38 @@ func TestCleanTranscriptText(t *testing.T) {
 			"rest of the conversation,. Complete the form",
 			"Rest of the conversation, complete the form",
 		},
+		{
+			"What is perhaps slightlyless well-known is this .",
+			"What is perhaps slightly less well-known is this.",
+		},
+		{
+			"December is able to supplyless than 5% in winter .",
+			"December is able to supply less than 5% in winter.",
+		},
+		{
+			"Yes, it's W- A- D- D- E- L- L.",
+			"Yes, it's W-A-D-D-E-L-L.",
+		},
+		{
+			"The card number is 4550-1392. 8309-32 21.",
+			"The card number is 4550-1392-8309-3221.",
+		},
+		{
+			"capital, wellington, and mount Narahoe on the transcoastal .",
+			"Capital, Wellington, and Mount Narahoe on the Transcoastal.",
+		},
+		{
+			"And that's Nelson, isn't it that's right .",
+			"And that's Nelson, isn't it? That's right.",
+		},
+		{
+			"Do you have any information about that oh yes, I've got an illustration .",
+			"Do you have any information about that? Oh yes, I've got an illustration.",
+		},
+		{
+			"by May before you hear the rest of the recording, you have some time .",
+			"By May. Before you hear the rest of the recording, you have some time.",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1087,6 +1119,272 @@ func TestProcessSegmentsSentenceStitcher(t *testing.T) {
 	expected15 := "Now, for those of you who are intending to take Esnia as part of a longer tour and want to wait till you get to another country, do remember that some Esnian consulates in neighbouring countries require you to provide a letter from your own embassy, just to confirm your nationality."
 	if res15[0].Transcript != expected15 {
 		t.Errorf("Test 15 transcript = %q, want %q", res15[0].Transcript, expected15)
+	}
+}
+
+func TestProcessSegmentsPT2Patterns(t *testing.T) {
+	segmenter := NewSegmenter()
+
+	// Test PT2-1: Honorific abbreviation "Mr." followed by person name
+	raw1 := []WhisperSegment{
+		{
+			Text:    "Continuing our theme of business marketing, I have with me today Mr.",
+			Offsets: WhisperOffsets{From: 1000, To: 5000},
+			Tokens: []WhisperToken{
+				{Text: "Continuing", Offsets: WhisperOffsets{From: 1000, To: 1500}},
+				{Text: " our", Offsets: WhisperOffsets{From: 1500, To: 1800}},
+				{Text: " theme", Offsets: WhisperOffsets{From: 1800, To: 2200}},
+				{Text: " of", Offsets: WhisperOffsets{From: 2200, To: 2400}},
+				{Text: " business", Offsets: WhisperOffsets{From: 2400, To: 2800}},
+				{Text: " marketing,", Offsets: WhisperOffsets{From: 2800, To: 3500}},
+				{Text: " I", Offsets: WhisperOffsets{From: 3500, To: 3700}},
+				{Text: " have", Offsets: WhisperOffsets{From: 3700, To: 4000}},
+				{Text: " with", Offsets: WhisperOffsets{From: 4000, To: 4200}},
+				{Text: " me", Offsets: WhisperOffsets{From: 4200, To: 4400}},
+				{Text: " today", Offsets: WhisperOffsets{From: 4400, To: 4700}},
+				{Text: " Mr.", Offsets: WhisperOffsets{From: 4700, To: 5000}},
+			},
+		},
+		{
+			Text:    "Brian Kinsella, who is here to talk about marketing.",
+			Offsets: WhisperOffsets{From: 5500, To: 9000},
+			Tokens: []WhisperToken{
+				{Text: "Brian", Offsets: WhisperOffsets{From: 5500, To: 5900}},
+				{Text: " Kinsella,", Offsets: WhisperOffsets{From: 5900, To: 6500}},
+				{Text: " who", Offsets: WhisperOffsets{From: 6500, To: 6800}},
+				{Text: " is", Offsets: WhisperOffsets{From: 6800, To: 7000}},
+				{Text: " here", Offsets: WhisperOffsets{From: 7000, To: 7300}},
+				{Text: " to", Offsets: WhisperOffsets{From: 7300, To: 7500}},
+				{Text: " talk", Offsets: WhisperOffsets{From: 7500, To: 7800}},
+				{Text: " about", Offsets: WhisperOffsets{From: 7800, To: 8200}},
+				{Text: " marketing.", Offsets: WhisperOffsets{From: 8200, To: 9000}},
+			},
+		},
+	}
+	res1 := segmenter.ProcessSegments(raw1)
+	if len(res1) != 1 {
+		t.Fatalf("PT2-1 expected 1 stitched sentence, got %d: %+v", len(res1), res1)
+	}
+	expected1 := "Continuing our theme of business marketing, I have with me today Mr. Brian Kinsella, who is here to talk about marketing."
+	if res1[0].Transcript != expected1 {
+		t.Errorf("PT2-1 transcript = %q, want %q", res1[0].Transcript, expected1)
+	}
+
+	// Test PT2-2: "etc." preceding severed predicate verb "Have not felt..."
+	raw2 := []WhisperSegment{
+		{
+			Text:    "Professionals like lawyers, accountants, etc.",
+			Offsets: WhisperOffsets{From: 10000, To: 14000},
+			Tokens: []WhisperToken{
+				{Text: "Professionals", Offsets: WhisperOffsets{From: 10000, To: 11000}},
+				{Text: " like", Offsets: WhisperOffsets{From: 11000, To: 11500}},
+				{Text: " lawyers,", Offsets: WhisperOffsets{From: 11500, To: 12200}},
+				{Text: " accountants,", Offsets: WhisperOffsets{From: 12200, To: 13200}},
+				{Text: " etc.", Offsets: WhisperOffsets{From: 13200, To: 14000}},
+			},
+		},
+		{
+			Text:    "Have not felt too comfortable with marketing.",
+			Offsets: WhisperOffsets{From: 14500, To: 18000},
+			Tokens: []WhisperToken{
+				{Text: "Have", Offsets: WhisperOffsets{From: 14500, To: 15000}},
+				{Text: " not", Offsets: WhisperOffsets{From: 15000, To: 15300}},
+				{Text: " felt", Offsets: WhisperOffsets{From: 15300, To: 15800}},
+				{Text: " too", Offsets: WhisperOffsets{From: 15800, To: 16100}},
+				{Text: " comfortable", Offsets: WhisperOffsets{From: 16100, To: 17000}},
+				{Text: " with", Offsets: WhisperOffsets{From: 17000, To: 17300}},
+				{Text: " marketing.", Offsets: WhisperOffsets{From: 17300, To: 18000}},
+			},
+		},
+	}
+	res2 := segmenter.ProcessSegments(raw2)
+	if len(res2) != 1 {
+		t.Fatalf("PT2-2 expected 1 stitched sentence, got %d: %+v", len(res2), res2)
+	}
+	expected2 := "Professionals like lawyers, accountants, etc. have not felt too comfortable with marketing."
+	if res2[0].Transcript != expected2 {
+		t.Errorf("PT2-2 transcript = %q, want %q", res2[0].Transcript, expected2)
+	}
+
+	// Test PT2-3: "of direct." + "Sunlight such as..."
+	raw3 := []WhisperSegment{
+		{
+			Text:    "Areas that are not exposed to long hours of direct.",
+			Offsets: WhisperOffsets{From: 20000, To: 24000},
+			Tokens: []WhisperToken{
+				{Text: "Areas", Offsets: WhisperOffsets{From: 20000, To: 20500}},
+				{Text: " that", Offsets: WhisperOffsets{From: 20500, To: 20800}},
+				{Text: " are", Offsets: WhisperOffsets{From: 20800, To: 21000}},
+				{Text: " not", Offsets: WhisperOffsets{From: 21000, To: 21300}},
+				{Text: " exposed", Offsets: WhisperOffsets{From: 21300, To: 22000}},
+				{Text: " to", Offsets: WhisperOffsets{From: 22000, To: 22300}},
+				{Text: " long", Offsets: WhisperOffsets{From: 22300, To: 22700}},
+				{Text: " hours", Offsets: WhisperOffsets{From: 22700, To: 23200}},
+				{Text: " of", Offsets: WhisperOffsets{From: 23200, To: 23500}},
+				{Text: " direct.", Offsets: WhisperOffsets{From: 23500, To: 24000}},
+			},
+		},
+		{
+			Text:    "Sunlight such as the United Kingdom.",
+			Offsets: WhisperOffsets{From: 24200, To: 28000},
+			Tokens: []WhisperToken{
+				{Text: "Sunlight", Offsets: WhisperOffsets{From: 24200, To: 25000}},
+				{Text: " such", Offsets: WhisperOffsets{From: 25000, To: 25400}},
+				{Text: " as", Offsets: WhisperOffsets{From: 25400, To: 25700}},
+				{Text: " the", Offsets: WhisperOffsets{From: 25700, To: 26000}},
+				{Text: " United", Offsets: WhisperOffsets{From: 26000, To: 26500}},
+				{Text: " Kingdom.", Offsets: WhisperOffsets{From: 26500, To: 28000}},
+			},
+		},
+	}
+	res3 := segmenter.ProcessSegments(raw3)
+	if len(res3) != 1 {
+		t.Fatalf("PT2-3 expected 1 stitched sentence, got %d: %+v", len(res3), res3)
+	}
+	expected3 := "Areas that are not exposed to long hours of direct sunlight such as the United Kingdom."
+	if res3[0].Transcript != expected3 {
+		t.Errorf("PT2-3 transcript = %q, want %q", res3[0].Transcript, expected3)
+	}
+
+	// Test PT2-4: Noun clause modal: "what the product." + "Will do for them."
+	raw4 := []WhisperSegment{
+		{
+			Text:    "They can comprehend exactly what the product.",
+			Offsets: WhisperOffsets{From: 30000, To: 34000},
+			Tokens: []WhisperToken{
+				{Text: "They", Offsets: WhisperOffsets{From: 30000, To: 30400}},
+				{Text: " can", Offsets: WhisperOffsets{From: 30400, To: 30700}},
+				{Text: " comprehend", Offsets: WhisperOffsets{From: 30700, To: 31500}},
+				{Text: " exactly", Offsets: WhisperOffsets{From: 31500, To: 32200}},
+				{Text: " what", Offsets: WhisperOffsets{From: 32200, To: 32600}},
+				{Text: " the", Offsets: WhisperOffsets{From: 32600, To: 33000}},
+				{Text: " product.", Offsets: WhisperOffsets{From: 33000, To: 34000}},
+			},
+		},
+		{
+			Text:    "Will do for them.",
+			Offsets: WhisperOffsets{From: 34200, To: 36000},
+			Tokens: []WhisperToken{
+				{Text: "Will", Offsets: WhisperOffsets{From: 34200, To: 34600}},
+				{Text: " do", Offsets: WhisperOffsets{From: 34600, To: 35000}},
+				{Text: " for", Offsets: WhisperOffsets{From: 35000, To: 35400}},
+				{Text: " them.", Offsets: WhisperOffsets{From: 35400, To: 36000}},
+			},
+		},
+	}
+	res4 := segmenter.ProcessSegments(raw4)
+	if len(res4) != 1 {
+		t.Fatalf("PT2-4 expected 1 stitched sentence, got %d: %+v", len(res4), res4)
+	}
+	expected4 := "They can comprehend exactly what the product will do for them."
+	if res4[0].Transcript != expected4 {
+		t.Errorf("PT2-4 transcript = %q, want %q", res4[0].Transcript, expected4)
+	}
+
+	// Test PT2-5: Credit card number severed by period: "The card number is 4550-1392." + "8309-32 21."
+	raw5 := []WhisperSegment{
+		{
+			Text:    "The card number is 4550-1392.",
+			Offsets: WhisperOffsets{From: 40000, To: 43000},
+			Tokens: []WhisperToken{
+				{Text: "The", Offsets: WhisperOffsets{From: 40000, To: 40300}},
+				{Text: " card", Offsets: WhisperOffsets{From: 40300, To: 40700}},
+				{Text: " number", Offsets: WhisperOffsets{From: 40700, To: 41200}},
+				{Text: " is", Offsets: WhisperOffsets{From: 41200, To: 41500}},
+				{Text: " 4550-1392.", Offsets: WhisperOffsets{From: 41500, To: 43000}},
+			},
+		},
+		{
+			Text:    "8309-32 21.",
+			Offsets: WhisperOffsets{From: 43200, To: 46000},
+			Tokens: []WhisperToken{
+				{Text: "8309-32", Offsets: WhisperOffsets{From: 43200, To: 44500}},
+				{Text: " 21.", Offsets: WhisperOffsets{From: 44500, To: 46000}},
+			},
+		},
+	}
+	res5 := segmenter.ProcessSegments(raw5)
+	if len(res5) != 1 {
+		t.Fatalf("PT2-5 expected 1 stitched sentence, got %d: %+v", len(res5), res5)
+	}
+	expected5 := "The card number is 4550-1392-8309-3221."
+	if res5[0].Transcript != expected5 {
+		t.Errorf("PT2-5 transcript = %q, want %q", res5[0].Transcript, expected5)
+	}
+
+	// Test PT2-6: "you have some time." + "To look at questions 26 to 30."
+	raw6 := []WhisperSegment{
+		{
+			Text:    "Before you hear the rest of the recording, you have some time.",
+			Offsets: WhisperOffsets{From: 50000, To: 54000},
+			Tokens: []WhisperToken{
+				{Text: "Before", Offsets: WhisperOffsets{From: 50000, To: 50500}},
+				{Text: " you", Offsets: WhisperOffsets{From: 50500, To: 50800}},
+				{Text: " hear", Offsets: WhisperOffsets{From: 50800, To: 51200}},
+				{Text: " the", Offsets: WhisperOffsets{From: 51200, To: 51400}},
+				{Text: " rest", Offsets: WhisperOffsets{From: 51400, To: 51800}},
+				{Text: " of", Offsets: WhisperOffsets{From: 51800, To: 52000}},
+				{Text: " the", Offsets: WhisperOffsets{From: 52000, To: 52300}},
+				{Text: " recording,", Offsets: WhisperOffsets{From: 52300, To: 53000}},
+				{Text: " you", Offsets: WhisperOffsets{From: 53000, To: 53300}},
+				{Text: " have", Offsets: WhisperOffsets{From: 53300, To: 53600}},
+				{Text: " some", Offsets: WhisperOffsets{From: 53600, To: 53800}},
+				{Text: " time.", Offsets: WhisperOffsets{From: 53800, To: 54000}},
+			},
+		},
+		{
+			Text:    "To look at questions 26 to 30.",
+			Offsets: WhisperOffsets{From: 54200, To: 57000},
+			Tokens: []WhisperToken{
+				{Text: "To", Offsets: WhisperOffsets{From: 54200, To: 54500}},
+				{Text: " look", Offsets: WhisperOffsets{From: 54500, To: 54900}},
+				{Text: " at", Offsets: WhisperOffsets{From: 54900, To: 55200}},
+				{Text: " questions", Offsets: WhisperOffsets{From: 55200, To: 55800}},
+				{Text: " 26", Offsets: WhisperOffsets{From: 55800, To: 56200}},
+				{Text: " to", Offsets: WhisperOffsets{From: 56200, To: 56500}},
+				{Text: " 30.", Offsets: WhisperOffsets{From: 56500, To: 57000}},
+			},
+		},
+	}
+	res6 := segmenter.ProcessSegments(raw6)
+	if len(res6) != 1 {
+		t.Fatalf("PT2-6 expected 1 stitched sentence, got %d: %+v", len(res6), res6)
+	}
+	expected6 := "Before you hear the rest of the recording, you have some time to look at questions 26 to 30."
+	if res6[0].Transcript != expected6 {
+		t.Errorf("PT2-6 transcript = %q, want %q", res6[0].Transcript, expected6)
+	}
+
+	// Test PT2-7: "Now, listen and answer." + "Questions one to five."
+	raw7 := []WhisperSegment{
+		{
+			Text:    "Now, listen and answer.",
+			Offsets: WhisperOffsets{From: 60000, To: 62000},
+			Tokens: []WhisperToken{
+				{Text: "Now,", Offsets: WhisperOffsets{From: 60000, To: 60500}},
+				{Text: " listen", Offsets: WhisperOffsets{From: 60500, To: 61000}},
+				{Text: " and", Offsets: WhisperOffsets{From: 61000, To: 61300}},
+				{Text: " answer.", Offsets: WhisperOffsets{From: 61300, To: 62000}},
+			},
+		},
+		{
+			Text:    "Questions one to five.",
+			Offsets: WhisperOffsets{From: 62200, To: 65000},
+			Tokens: []WhisperToken{
+				{Text: "Questions", Offsets: WhisperOffsets{From: 62200, To: 63000}},
+				{Text: " one", Offsets: WhisperOffsets{From: 63000, To: 63500}},
+				{Text: " to", Offsets: WhisperOffsets{From: 63500, To: 64000}},
+				{Text: " five.", Offsets: WhisperOffsets{From: 64000, To: 65000}},
+			},
+		},
+	}
+	res7 := segmenter.ProcessSegments(raw7)
+	if len(res7) != 1 {
+		t.Fatalf("PT2-7 expected 1 stitched sentence, got %d: %+v", len(res7), res7)
+	}
+	expected7 := "Now, listen and answer questions one to five."
+	if res7[0].Transcript != expected7 {
+		t.Errorf("PT2-7 transcript = %q, want %q", res7[0].Transcript, expected7)
 	}
 }
 

@@ -36,7 +36,17 @@ var (
 	doubleCommaPeriod    = regexp.MustCompile(`,\s*\.`)
 	doublePeriodComma    = regexp.MustCompile(`\.\s*,`)
 
-
+	fusedAdverbLessRegex       = regexp.MustCompile(`\b([a-zA-Z]+ly)(less)\b`)
+	fusedSupplyLessRegex       = regexp.MustCompile(`\b(supply)(less)\s+(than)\b`)
+	spellingHyphenRegex        = regexp.MustCompile(`\b([A-Za-z])-\s+([A-Za-z])\b`)
+	creditCardInlineRegex      = regexp.MustCompile(`\b(\d{4}-\d{4})\.\s*(\d{4}-\d{2,4})\b`)
+	creditCardSpacedRegex      = regexp.MustCompile(`\b(\d{4}-\d{4}-\d{4}-)(\d{2})\s+(\d{2})\b`)
+	creditCardBlockRegex       = regexp.MustCompile(`\b\d{4}-\d{4}\.?$`)
+	creditCardStartRegex       = regexp.MustCompile(`^\d{4}(?:-\d{2,4}|\s+\d{2,4})\b`)
+	tagQuestionTransitionRegex = regexp.MustCompile(`(?i)\b(isn't it|aren't you|doesn't it|don't you|didn't you|won't you|can't you)\s+(that's right|yes|no|exactly|sure)\b`)
+	aboutThatOhRegex           = regexp.MustCompile(`(?i)\b(about that)\s+(oh\s+(?:yes|no))\b`)
+	mountPrefixRegex           = regexp.MustCompile(`\b([mM]ount)\s+([A-Z][a-z]+)\b`)
+	ieltsNarratorPromptRegex   = regexp.MustCompile(`(?i)\b([a-z0-9%]+)\s+before\s+you\s+hear\s+the\s+rest\s+of\s+the\s+(recording|talk|conversation)\b`)
 
 	// Punctuation spacing (selective: avoid inserting space inside numbers like 5.45, 10,000, 5:45)
 	punctLetterSpacingRegex  = regexp.MustCompile(`([;?!])([A-Za-z0-9])`)
@@ -55,7 +65,7 @@ var (
 
 	pronounIRegex        = regexp.MustCompile(`(?i)\b(i)(['’](?:m|ve|ll|d))?\b`)
 	afterPunctRegex      = regexp.MustCompile(`([.!?]\s+)([a-z])`)
-	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama)\b`)
+	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama|wellington|auckland|christchurch|queenstown|transcoastal|narahoe|ruapehu|tongariro)\b`)
 	runonTransitionRegex = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There|Get|Tell|Start)\b)`)
 )
 
@@ -210,7 +220,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 					}
 					// Check if this punctuation terminates a sentence (skip if next token is TLD, decimal, or incomplete grammar phrase)
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(prevWordText, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(prevWordText, nextTok) && !isCreditCardContinuation(prevWordText, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
 							finalizeSentence()
 						}
 					}
@@ -243,7 +253,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 					// (e.g. was rejected because it's dangling or part of a number range):
 					if len(currentWords) > 0 {
 						prevWord := currentWords[len(currentWords)-1].Text
-						if sentenceEndRegex.MatchString(prevWord) && !isDecimalContinuation(cleanToken) && !isKnownTLD(cleanToken) {
+						if sentenceEndRegex.MatchString(prevWord) && !abbrevRegex.MatchString(prevWord) && !isDecimalContinuation(cleanToken) && !isKnownTLD(cleanToken) {
 							cleanPrev := strings.TrimRight(prevWord, " \t\r\n.,;?!\"'")
 							currentWords[len(currentWords)-1].Text = cleanPrev
 
@@ -306,7 +316,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 
 					// Check if this word terminates a sentence (e.g. " 2.", " now.", " world!")
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(cleanToken, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(cleanToken, nextTok) && !isCreditCardContinuation(cleanToken, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
 							finalizeSentence()
 						}
 					}
@@ -466,8 +476,24 @@ func CleanTranscriptText(text string) string {
 	// 5a4. Fix discourse markers and conversational filler splits (e.g. "you. Know" -> "you know")
 	text = youKnowInlineRegex.ReplaceAllString(text, "you know")
 
+	// 5a5. Fix spelling hyphen spacing (e.g. "W- A- D- D- E- L- L" -> "W-A-D-D-E-L-L")
+	for i := 0; i < 4; i++ {
+		text = spellingHyphenRegex.ReplaceAllString(text, "$1-$2")
+	}
 
-	// 5b. Clean dangling possessives/articles/modals with accidental periods (e.g. "my. Hair" -> "my hair", "with the." -> "with the...", "15. To 20" -> "15 to 20")
+	// 5a6. Fix credit card number periods and group spacing (e.g. "4550-1392. 8309-32 21" -> "4550-1392-8309-3221")
+	text = creditCardInlineRegex.ReplaceAllString(text, "$1-$2")
+	text = creditCardSpacedRegex.ReplaceAllString(text, "$1$2$3")
+
+	// 5a7. Fix conversational dialogue transitions without punctuation (e.g. "isn't it that's right" -> "isn't it? That's right")
+	text = tagQuestionTransitionRegex.ReplaceAllString(text, "$1? $2")
+	text = aboutThatOhRegex.ReplaceAllString(text, "$1? $2")
+
+	// 5a8. Fix Mount prefix capitalization (e.g. "mount Narahoe" -> "Mount Narahoe")
+	text = mountPrefixRegex.ReplaceAllString(text, "Mount $2")
+
+	// 5a9. Fix narrator prompt run-on transition (e.g. "...by May before you hear..." -> "...by May. Before you hear...")
+	text = ieltsNarratorPromptRegex.ReplaceAllString(text, "$1. Before you hear the rest of the $2")
 	text = numberRangeInline.ReplaceAllString(text, "$1 to $3")
 	text = danglingWordInline.ReplaceAllStringFunc(text, func(m string) string {
 		parts := danglingWordInline.FindStringSubmatch(m)
@@ -497,6 +523,10 @@ func CleanTranscriptText(text string) string {
 
 	// 5d. Fix bound-morpheme suffix detachment (e.g. "budget ed" -> "budgeted", "vacuum ing" -> "vacuuming", "spong es" -> "sponges")
 	text = boundSuffixRegex.ReplaceAllString(text, "$1$2")
+
+	// 5e. Fix fused adverbs and conjunctions (must run after bound suffixes: "slightlyless" -> "slightly less", "supplyless than" -> "supply less than")
+	text = fusedAdverbLessRegex.ReplaceAllString(text, "$1 $2")
+	text = fusedSupplyLessRegex.ReplaceAllString(text, "$1 $2 $3")
 
 	// 6. Ensure space after punctuation if followed immediately by letter/number (selective to protect numbers & domains)
 	text = punctLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
@@ -572,6 +602,20 @@ func CleanTranscriptText(text string) string {
 		return m
 	})
 
+	// 12b. Lowercase words mistakenly capitalized after non-terminal abbreviations (e.g. "etc.", "e.g.", "i.e.")
+	abbrevFollowRegex := regexp.MustCompile(`(?i)\b(etc|e\.g|i\.e|vs|approx)\.\s+([A-Z][a-z]+)`)
+	text = abbrevFollowRegex.ReplaceAllStringFunc(text, func(m string) string {
+		parts := abbrevFollowRegex.FindStringSubmatch(m)
+		if len(parts) == 3 {
+			if shouldLowercaseInContinuation(parts[2], "") {
+				runes := []rune(parts[2])
+				runes[0] = unicode.ToLower(runes[0])
+				return parts[1] + ". " + string(runes)
+			}
+		}
+		return m
+	})
+
 	// 13. Split run-on clauses where a lowercase word is followed immediately by a capitalized sentence transition
 	text = runonTransitionRegex.ReplaceAllString(text, "$1. $2")
 
@@ -636,6 +680,15 @@ func isNumberRangeContinuation(tok string, nextTok string) bool {
 		return true
 	}
 	return false
+}
+
+func isCreditCardContinuation(tok string, nextTok string) bool {
+	cleanTok := strings.Trim(tok, " \t\r\n.,;?!\"'")
+	cleanNext := strings.Trim(nextTok, " \t\r\n.,;?!\"'")
+	if cleanTok == "" || cleanNext == "" {
+		return false
+	}
+	return creditCardBlockRegex.MatchString(cleanTok) && creditCardStartRegex.MatchString(cleanNext)
 }
 
 
@@ -873,7 +926,7 @@ var (
 		"microphone": true, "listening practice": true, "there": true,
 		"people start": true, "they have": true, "because they have": true,
 		"as i have": true, "since they have": true, "whether you need": true,
-		"you need": true, "you know": true,
+		"you need": true, "you know": true, "of direct": true, "in direct": true,
 	}
 )
 
@@ -889,6 +942,12 @@ func isDanglingOrIncomplete(text string) bool {
 	}
 
 	lastWord := strings.ToLower(strings.Trim(words[len(words)-1], " \t\r\n.,;?!\"'()[]"))
+
+	// Check honorific titles that cannot conclude a sentence
+	switch lastWord {
+	case "mr", "mrs", "ms", "prof":
+		return true
+	}
 
 	// Check compound adjectives with hyphen ending in time/measurement words
 	if strings.Contains(lastWord, "-") {
@@ -953,6 +1012,10 @@ func isDanglingOrIncomplete(text string) bool {
 		wPrev1 := strings.ToLower(strings.Trim(words[len(words)-2], " \t\r\n.,;?!\"'()[]"))
 		lastThree := wPrev2 + " " + wPrev1 + " " + lastWord
 		if danglingModals[lastThree] || danglingAdjectives[lastThree] || danglingPhrasalVerbs[lastThree] {
+			return true
+		}
+		// Severed noun clause: "what the [noun]", "how the [noun]", "where the [noun]"
+		if (wPrev2 == "what" || wPrev2 == "how" || wPrev2 == "where") && (wPrev1 == "the" || wPrev1 == "a" || wPrev1 == "this" || wPrev1 == "that") {
 			return true
 		}
 	}
@@ -1143,6 +1206,70 @@ func shouldStitch(s1, s2 study.Sentence) bool {
 		isLinked = true
 	}
 
+	// Case Q: Honorific title continuation (Mr., Mrs., Ms., Dr., Prof.)
+	switch lastWordS1 {
+	case "mr", "mrs", "ms", "dr", "prof":
+		if lastWordS1 == "dr" {
+			if len(w2) > 0 && unicode.IsUpper([]rune(w2[0])[0]) {
+				isLinked = true
+			}
+		} else {
+			isLinked = true
+		}
+	}
+
+	// Case R: List abbreviation "etc." preceding a severed predicate verb
+	if lastWordS1 == "etc" {
+		switch firstWordS2 {
+		case "have", "has", "had", "are", "is", "were", "was", "do", "did", "can", "will", "would", "should", "could":
+			if !strings.HasSuffix(strings.TrimSpace(s2.Transcript), "?") {
+				isLinked = true
+			}
+		}
+	}
+
+	// Case S: Attributive adjective "direct" preceding noun in s2
+	if lastWordS1 == "direct" {
+		switch firstWordS2 {
+		case "sunlight", "light", "heat", "contact", "access", "impact", "flight", "action", "current", "evidence":
+			isLinked = true
+		}
+	}
+
+	// Case T: Incomplete noun clause or severed subject preceding a modal verb without explicit subject in s2
+	if firstWordS2 == "will" || firstWordS2 == "would" || firstWordS2 == "can" || firstWordS2 == "could" || firstWordS2 == "should" {
+		if len(w2) >= 2 {
+			secondWordS2 := strings.ToLower(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]"))
+			switch secondWordS2 {
+			case "do", "make", "be", "have", "cost", "work", "help", "give", "take", "provide", "allow", "enable":
+				if !strings.HasSuffix(strings.TrimSpace(s2.Transcript), "?") {
+					isLinked = true
+				}
+			}
+		}
+	}
+
+	// Case U: Time / opportunity noun followed by to-infinitive IELTS prompt or clause complement
+	if lastWordS1 == "time" && firstWordS2 == "to" && len(w2) >= 2 {
+		secondWordS2 := strings.ToLower(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]"))
+		switch secondWordS2 {
+		case "look", "read", "answer", "check", "complete", "see", "think", "listen", "prepare":
+			isLinked = true
+		}
+	}
+
+	// Case V: IELTS instruction prompt: "Now, listen and answer." + "Questions X to Y."
+	if strings.HasSuffix(strings.ToLower(strings.Trim(s1.Transcript, " \t\r\n.,;?!\"'")), "listen and answer") &&
+		firstWordS2 == "questions" {
+		isLinked = true
+	}
+
+	// Case W: Credit card block sliced by punctuation: e.g. "4550-1392." + "8309-32 21."
+	if creditCardBlockRegex.MatchString(strings.TrimRight(s1.Transcript, " \t\r\n.,;?!\"'")) &&
+		creditCardStartRegex.MatchString(strings.TrimSpace(s2.Transcript)) {
+		isLinked = true
+	}
+
 	if !isLinked {
 		return false
 	}
@@ -1155,8 +1282,8 @@ func shouldStitch(s1, s2 study.Sentence) bool {
 		// When s2 is an orphan fragment (<= 7 words), expand limit to prevent amputating sentence tails
 		maxWords = 48
 		maxDur = 32000
-	} else if isDanglingOrIncomplete(s1.Transcript) || firstWordS2 == "require" || firstWordS2 == "need" {
-		// When s1 is dangling or completing a relative clause predicate
+	} else if isDanglingOrIncomplete(s1.Transcript) || firstWordS2 == "require" || firstWordS2 == "need" || lastWordS1 == "etc" || lastWordS1 == "mr" || lastWordS1 == "mrs" || lastWordS1 == "ms" || lastWordS1 == "prof" {
+		// When s1 is dangling or completing a relative clause predicate / title
 		maxWords = 52
 		maxDur = 32000
 	}
@@ -1176,14 +1303,32 @@ func shouldStitch(s1, s2 study.Sentence) bool {
 func mergeTwoSentences(s1, s2 study.Sentence) study.Sentence {
 	s1RawTrimmed := strings.TrimSpace(s1.Transcript)
 	s1HadComma := strings.HasSuffix(s1RawTrimmed, ",") || strings.HasSuffix(s1RawTrimmed, ",.") || strings.HasPrefix(strings.ToLower(s1RawTrimmed), "as you listen")
+
+	// Check if s1 ends in an abbreviation that should retain its dot (Mr., Mrs., Ms., Dr., Prof., etc.)
+	lastWordLower := ""
+	wS1 := strings.Fields(s1RawTrimmed)
+	if len(wS1) > 0 {
+		lastWordLower = strings.ToLower(strings.Trim(wS1[len(wS1)-1], " \t\r\n.,;?!\"'"))
+	}
+	isAbbrev := false
+	switch lastWordLower {
+	case "mr", "mrs", "ms", "dr", "prof", "etc":
+		isAbbrev = true
+	}
+
 	s1Text := strings.TrimRight(s1RawTrimmed, " \t\r\n.,;?!\"'")
+	if isAbbrev && strings.Contains(s1RawTrimmed, ".") {
+		s1Text += "."
+	}
 	s2Text := strings.TrimSpace(s2.Transcript)
 
-	// Clean word timings in s1: strip trailing punctuation from the last word
+	// Clean word timings in s1: strip trailing punctuation from the last word (unless abbreviation)
 	words1 := make([]study.WordTiming, len(s1.Words))
 	copy(words1, s1.Words)
 	if len(words1) > 0 {
-		words1[len(words1)-1].Text = strings.TrimRight(words1[len(words1)-1].Text, " \t\r\n.,;?!\"'")
+		if !isAbbrev {
+			words1[len(words1)-1].Text = strings.TrimRight(words1[len(words1)-1].Text, " \t\r\n.,;?!\"'")
+		}
 	}
 
 	// Prepare words for s2: check if first word should be lowercased
@@ -1246,9 +1391,19 @@ func shouldLowercaseInContinuation(word string, prevText string) bool {
 		return false
 	}
 
+	// Never lowercase person names following honorific titles (Mr., Mrs., Ms., Dr., Prof., Sir, Lady, Lord)
+	prevWords := strings.Fields(strings.TrimRight(prevText, " \t\r\n.,;?!\"'"))
+	if len(prevWords) > 0 {
+		prevLast := strings.ToLower(strings.Trim(prevWords[len(prevWords)-1], " \t\r\n.,;?!\"'"))
+		switch prevLast {
+		case "mr", "mrs", "ms", "dr", "prof", "sir", "lady", "lord":
+			return false
+		}
+	}
+
 	// Never lowercase recognized proper nouns
 	switch lower {
-	case "esnia", "esnian", "japanese", "keiko", "yuichini", "willow", "rome", "elizabeth", "circle", "english", "british", "american", "america", "england", "bm-276":
+	case "esnia", "esnian", "japanese", "keiko", "yuichini", "willow", "rome", "elizabeth", "circle", "english", "british", "american", "america", "england", "bm-276", "auckland", "wellington", "transcoastal":
 		return false
 	}
 

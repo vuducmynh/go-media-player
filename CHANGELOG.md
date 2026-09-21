@@ -4,6 +4,37 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.14] - 21/09/2026
+
+# Bảo Toàn Danh Xưng, Chữ Viết Tắt & Khâu Liền Mạch Số Thẻ, Động Từ Khuyết Cùng Chỉ Dẫn IELTS
+
+Bản cập nhật v1.3.14 giải quyết triệt để các trường hợp phân mảnh câu và dị tật chính tả Whisper đặc thù phát hiện trên Practice Test 2 và các audio hội thoại/học thuật: bảo tồn dấu chấm danh xưng và viết tắt (`Mr.`, `Mrs.`, `etc.`), khâu liền số thẻ thanh toán bị cắt đôi, nối liền mệnh đề danh ngữ với động từ khiếm khuyết, hợp nhất câu chỉ dẫn thi IELTS, tự động tách các từ bị dính chùm và chuẩn hóa dấu câu hội thoại giao tiếp.
+
+### Cải tiến (3)
+- **Bảo tồn danh xưng & Chữ viết tắt chuẩn mực (Honorifics & Abbreviation Preservation)**:
+  - Tự động nhận diện danh xưng (`Mr.`, `Mrs.`, `Ms.`, `Dr.`, `Prof.`) và viết tắt danh mục (`etc.`), không cho phép thuật toán cắt câu sau các từ này trong lúc người nói tạm ngừng (`pause`).
+  - Bảo tồn dấu chấm danh xưng nguyên vẹn và bảo vệ tên riêng phía sau không bị biến thành chữ thường: `...today Mr.` + `Brian Kinsella...` ➔ `...today Mr. Brian Kinsella, who is here to talk...`.
+  - Khâu liền vị từ bị ngắt sau `etc.`: `lawyers, accountants, etc.` + `Have not felt...` ➔ `lawyers, accountants, etc. have not felt too comfortable with marketing...`.
+- **Khâu liền khối số thẻ thanh toán & Chuẩn hóa đánh vần (Credit Card & Spelling Normalization)**:
+  - Tự động phát hiện và khâu liền 16 chữ số thẻ thanh toán bị dấu chấm chia đôi thành một khối hoàn chỉnh: `The card number is 4550-1392.` + `8309-32 21.` ➔ `The card number is 4550-1392-8309-3221.`.
+  - Chuẩn hóa khoảng trắng đánh vần tên riêng có gạch nối: `W- A- D- D- E- L- L` ➔ `W-A-D-D-E-L-L`.
+- **Hợp nhất câu chỉ dẫn đề thi IELTS & Câu hỏi đuôi (IELTS Prompts & Tag Questions)**:
+  - Khâu liền mạch các câu lệnh thi quen thuộc: `Now, listen and answer.` + `Questions one to five.` ➔ `Now, listen and answer questions one to five.`, và `...you have some time.` + `To look at questions 26 to 30.` ➔ `...you have some time to look at questions 26 to 30.`.
+  - Tự động bổ sung dấu chấm câu chuyển tiếp khi người dẫn chuyện bắt đầu chỉ dẫn: `...around 18% by May before you hear...` ➔ `...around 18% by May. Before you hear the rest of the recording...`.
+  - Chuẩn hóa dấu chấm hỏi cho câu hỏi đuôi và chuyển lượt thoại hội thoại: `isn't it that's right` ➔ `isn't it? That's right.`, `about that oh yes` ➔ `about that? Oh yes...`.
+
+### Sửa lỗi (2)
+- **Khắc phục tách rời tính từ chỉ định & Mệnh đề danh ngữ (Adjective & Noun Clause Slicing)**:
+  - Khâu liền cụm giới từ - tính từ chỉ định: `...exposed to long hours of direct.` + `Sunlight such as...` ➔ `...exposed to long hours of direct sunlight such as the United Kingdom...`.
+  - Khâu liền mệnh đề danh ngữ với động từ khuyết: `...what the product.` + `Will do for them.` ➔ `...what the product will do for them.`.
+- **Sửa lỗi dính từ của mô hình Whisper (Subword Fusion Healing)**:
+  - Tự động tách các từ dính chùm âm thanh: `slightlyless` ➔ `slightly less`, `supplyless than` ➔ `supply less than`.
+  - Tự động viết hoa địa danh và tiền tố núi: `wellington` ➔ `Wellington`, `transcoastal` ➔ `Transcoastal`, `mount Narahoe` ➔ `Mount Narahoe`.
+
+### Bản vá (0)
+
+---
+
 ## [v1.3.13] - 21/09/2026
 
 # Mở Khóa Độ Dài Linh Hoạt Cho Mẩu Câu Mồ Côi & Bảo Tồn Toàn Vẹn Cú Pháp Câu Luyện Nghe
