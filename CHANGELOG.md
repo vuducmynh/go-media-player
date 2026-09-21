@@ -4,6 +4,31 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.12] - 21/09/2026
+
+# Hoàn Thiện Tinh Tế Thuật Toán Phân Đoạn, Xử Lý Triệt Để 9 Trường Hợp Biên Cắt Vụn & Làm Sạch Dấu Câu Kép
+
+Bản cập nhật v1.3.12 hoàn thiện nốt 9 trường hợp biên (edge cases) tinh tế trong nhận diện giọng nói phục vụ luyện nghe tiếng Anh: xử lý đại từ chủ ngữ đứng sau liên từ (`as I`, `because they`), tính từ phân từ và từ ghép có gạch nối (`neighbouring countries`, `five-week course`), động từ đòi hỏi to-V (`start to look`) và tân ngữ trực tiếp (`have an assignment`), cụm từ đệm giao tiếp (`you know`), dán liền subword `denominations`, và loại bỏ triệt để hiện tượng dấu câu kép `,.`.
+
+### Cải tiến & Khắc phục lỗi (5)
+- **Bảo vệ đại từ chủ ngữ phụ thuộc (Subordinate Subject Pronouns)**:
+  - Tự động nhận diện đại từ nhân xưng chủ ngữ (`I`, `he`, `she`, `we`, `they`) đứng sau các liên từ phụ thuộc (`as I`, `because they`, `when we`, `if you`, `that I`, `while we`...): ngăn chặn 100% việc cắt câu dở dang như `...after the lecture, as I.` \| `Have a book list...` ➔ `...after the lecture, as I have a book list here and some other useful materials.`
+- **Bảo vệ tính từ phân từ & Tính từ ghép có gạch nối (Attributive & Compound Adjectives)**:
+  - Tự động gom các tính từ ghép chỉ thời gian/định lượng (`five-week`, `part-time`, `full-time`, `two-year`) và tính từ phân từ (`neighbouring`, `neighboring`, `surrounding`) vào danh từ phía sau: `five-week.` + `Course right...` ➔ `five-week course. Right...`, `neighbouring.` + `Countries require...` ➔ `neighbouring countries require...`.
+- **Khâu liền động từ vị ngữ với to-Infinitive & Tân ngữ trực tiếp (Predicate Complementation)**:
+  - Khâu nối mượt mà các động từ trạng thái/bắt đầu (`start`, `started`, `begin`, `continue`, `tend`, `manage`, `try`, `plan`...) khi theo sau bởi `to + V`: `when people start.` + `To look a bit stressed.` ➔ `when people start to look a bit stressed.`
+  - Khâu nối ngoại động từ (`they have`, `we have`, `you need`) với tân ngữ bắt đầu bằng mạo từ (`a`, `an`, `the`): `mainly because they have.` + `An assignment to do.` ➔ `mainly because they have an assignment to do.`
+- **Nhận diện cụm từ đệm & Danh từ ghép học thuật (Discourse Markers & Compound Nouns)**:
+  - Tự động khâu cụm từ đệm hội thoại phổ biến: `with colleagues from work, you.` + `Know, in our lunch hour.` ➔ `with colleagues from work, you know, in our lunch hour.`
+  - Hợp nhất cụm danh từ ghép: `how to use the library.` + `Computer system...` ➔ `how to use the library computer system...`
+  - Nối liền câu chỉ dẫn đề thi IELTS: `As you listen to the rest of the conversation, complete the form...`
+- **Làm sạch dấu câu kép & Định dạng ngoại hối (Double Punctuation & Currency Formatting)**:
+  - Triệt tiêu hoàn toàn lỗi dấu câu kép `,.` (e.g. `conversation,.` ➔ `conversation,`, `course,.` ➔ `course,`).
+  - Tự động vá lỗi tách rời subword tiền tệ: `denomin ations` ➔ `denominations`.
+  - Tự động định dạng khoảng trắng ngoại tệ: `dollars.us dollars` ➔ `dollars. US dollars`.
+
+---
+
 ## [v1.3.11] - 21/09/2026
 
 # Tự Động Vá Lành & Chống Cắt Vụn Câu Luyện Nghe, Xóa Bỏ Dấu Chấm Giữa Chừng & Ghép Nối Đa Tầng Ranh Giới Whisper

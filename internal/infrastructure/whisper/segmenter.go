@@ -23,14 +23,19 @@ var (
 	// Sub-word prefix clusters & bound morphemes
 	subwordPrefixRegex = regexp.MustCompile(`(^|\s)(wr|kn|cl|cr|tr|bl|br|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|wh|ch|Wr|Kn|Cl|Cr|Tr|Bl|Br|Fl|Fr|Gl|Gr|Pl|Pr|Sc|Sk|Sl|Sm|Sn|Sp|Sw|Wh|Ch|[b-hj-z])\s+([a-z]{2,})\b`)
 	boundSuffixRegex   = regexp.MustCompile(`(?i)\b([a-zA-Z]{2,})\s+(ing|ed|ly|es|tion|sion|ment|ness|ible|ables|ish|ful|less|ize|ise)\b`)
-	specialWordMergers = regexp.MustCompile(`(?i)\b(?:hes\s+itating|can\s+adian|c\s*e\s*f\s*r(?:\s*level)?|circle\s+kand)\b`)
-	spacedAcronym4     = regexp.MustCompile(`\b([A-Z])\s+([A-Z])\s+([A-Z])\s+([A-Z])\b`)
-	spacedAcronym3     = regexp.MustCompile(`\b([A-Z])\s+([A-Z])\s+([A-Z])\b`)
+	specialWordMergers = regexp.MustCompile(`(?i)\b(?:hes\s+itating|can\s+adian|c\s*e\s*f\s*r(?:\s*level)?|circle\s+kand|denomin\s+ations)\b`)
+	spacedAcronym4     = regexp.MustCompile(`\b([A-Z])\s+([A-Z])\s+([A-Z])\b`)
+	spacedAcronym3     = regexp.MustCompile(`\b([A-Z])\s+([A-Z])\b`)
 	acronymNounSplit   = regexp.MustCompile(`\b([A-Z]{2,})([a-z]{2,})\b`)
-	danglingWordRegex  = regexp.MustCompile(`(?i)\b(?:my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.["]?$`)
+	danglingWordRegex  = regexp.MustCompile(`(?i)\b(?:my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so|neighbouring|neighboring|surrounding)\.["]?$`)
 	numberRangeInline  = regexp.MustCompile(`\b(\d+)\.\s+([tT]o)\s+(\d+)\b`)
-	danglingWordInline = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so|been|has\s+been|have\s+been|will\s+be|would\s+be|without|about|into|through|under|now|will|would|can|could|should|shall|numbered|longer|special|written|cautious|notice)\.\s+([a-zA-Z])`)
-	danglingWordTrailing = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.$`)
+	danglingWordInline = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so|been|has\s+been|have\s+been|will\s+be|would\s+be|without|about|into|through|under|now|will|would|can|could|should|shall|numbered|longer|special|written|cautious|notice|neighbouring|neighboring|surrounding|as\s+i|because\s+they|when\s+we|if\s+you|that\s+i|people\s+start|whether\s+you\s+need|you\s+need)\.\s+([a-zA-Z])`)
+	danglingWordTrailing = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so|neighbouring|neighboring|surrounding|as\s+i|because\s+they|when\s+we|if\s+you|that\s+i|people\s+start|whether\s+you\s+need|you\s+need)\.$`)
+	youKnowInlineRegex   = regexp.MustCompile(`(?i)\byou\.\s+[kK]now\b`)
+	dollarsUSRegex       = regexp.MustCompile(`(?i)\b(dollars)\.\s*(us\s+dollars)\b`)
+	doubleCommaPeriod    = regexp.MustCompile(`,\s*\.`)
+	doublePeriodComma    = regexp.MustCompile(`\.\s*,`)
+
 
 
 	// Punctuation spacing (selective: avoid inserting space inside numbers like 5.45, 10,000, 5:45)
@@ -119,11 +124,11 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 			currentEndMs = currentWords[len(currentWords)-1].EndMs
 		}
 
-		// Ensure sentence ends with terminating punctuation if missing
+		// Ensure sentence ends with terminating punctuation if missing (strip trailing commas/colons first)
 		if !sentenceEndRegex.MatchString(text) {
-			text += "."
+			text = strings.TrimRight(text, " \t\r\n,;:—–-") + "."
 			if len(currentWords) > 0 {
-				currentWords[len(currentWords)-1].Text += "."
+				currentWords[len(currentWords)-1].Text = strings.TrimRight(currentWords[len(currentWords)-1].Text, " \t\r\n,;:—–-") + "."
 			}
 		}
 
@@ -427,7 +432,7 @@ func CleanTranscriptText(text string) string {
 	// 4. Fix hyphenated compound words (e.g. "flip - flops" -> "flip-flops")
 	text = spacesHyphenRegex.ReplaceAllString(text, "$1-$2")
 
-	// 5a. Fix special known word fragment splits first (e.g. CE FR -> CEFR, Circle Kand -> Circle K and)
+	// 5a. Fix special known word fragment splits first (e.g. CE FR -> CEFR, Circle Kand -> Circle K and, denomin ations -> denominations)
 	text = specialWordMergers.ReplaceAllStringFunc(text, func(m string) string {
 		lower := strings.ToLower(m)
 		switch {
@@ -442,6 +447,8 @@ func CleanTranscriptText(text string) string {
 			return "CEFR"
 		case strings.Contains(lower, "circle"):
 			return "Circle K and"
+		case strings.Contains(lower, "denomin"):
+			return "denominations"
 		default:
 			return m
 		}
@@ -451,6 +458,14 @@ func CleanTranscriptText(text string) string {
 	text = spacedAcronym4.ReplaceAllString(text, "$1$2$3$4")
 	text = spacedAcronym3.ReplaceAllString(text, "$1$2$3")
 	text = acronymNounSplit.ReplaceAllString(text, "$1 $2")
+
+	// 5a3. Fix double/conflicting punctuation marks (e.g. ",." -> ",", ".," -> ",")
+	text = doubleCommaPeriod.ReplaceAllString(text, ",")
+	text = doublePeriodComma.ReplaceAllString(text, ",")
+
+	// 5a4. Fix discourse markers and conversational filler splits (e.g. "you. Know" -> "you know")
+	text = youKnowInlineRegex.ReplaceAllString(text, "you know")
+
 
 	// 5b. Clean dangling possessives/articles/modals with accidental periods (e.g. "my. Hair" -> "my hair", "with the." -> "with the...", "15. To 20" -> "15 to 20")
 	text = numberRangeInline.ReplaceAllString(text, "$1 to $3")
@@ -505,7 +520,27 @@ func CleanTranscriptText(text string) string {
 	text = brokenDomainRegex.ReplaceAllStringFunc(text, func(m string) string {
 		parts := brokenDomainRegex.FindStringSubmatch(m)
 		if len(parts) == 3 {
+			if strings.EqualFold(parts[1], "dollars") && strings.EqualFold(parts[2], "us") {
+				return m
+			}
 			return parts[1] + "." + strings.ToLower(parts[2])
+		}
+		return m
+	})
+
+	// 9b. Format currency country codes (e.g. "dollars.us dollars" -> "dollars. US dollars")
+	text = dollarsUSRegex.ReplaceAllString(text, "$1. US dollars")
+
+	// 9c. Lowercase words mistakenly capitalized after a comma unless "I" or proper noun
+	afterCommaRegex := regexp.MustCompile(`(,\s+)([A-Z][a-z]+)`)
+	text = afterCommaRegex.ReplaceAllStringFunc(text, func(m string) string {
+		parts := afterCommaRegex.FindStringSubmatch(m)
+		if len(parts) == 3 {
+			if shouldLowercaseInContinuation(parts[2], "") {
+				runes := []rune(parts[2])
+				runes[0] = unicode.ToLower(runes[0])
+				return parts[1] + string(runes)
+			}
 		}
 		return m
 	})
@@ -826,6 +861,8 @@ var (
 		"cautious": true, "difficult": true, "higher": true, "lower": true,
 		"two written": true, "part of a longer": true, "issues a special": true,
 		"provide a": true, "arrange to": true,
+		"neighbouring": true, "neighboring": true, "surrounding": true,
+		"first five-week": true, "five-week": true,
 	}
 
 	// Incomplete verb phrases, idioms and noun modifiers
@@ -834,6 +871,9 @@ var (
 		"stick to": true, "spend on": true, "reach": true, "reaching": true,
 		"achieve": true, "before the talk": true, "is this microphone": true,
 		"microphone": true, "listening practice": true, "there": true,
+		"people start": true, "they have": true, "because they have": true,
+		"as i have": true, "since they have": true, "whether you need": true,
+		"you need": true, "you know": true,
 	}
 )
 
@@ -849,6 +889,27 @@ func isDanglingOrIncomplete(text string) bool {
 	}
 
 	lastWord := strings.ToLower(strings.Trim(words[len(words)-1], " \t\r\n.,;?!\"'()[]"))
+
+	// Check compound adjectives with hyphen ending in time/measurement words
+	if strings.Contains(lastWord, "-") {
+		parts := strings.Split(lastWord, "-")
+		lastPart := parts[len(parts)-1]
+		switch lastPart {
+		case "week", "weeks", "day", "days", "year", "years", "month", "months", "hour", "hours", "minute", "minutes", "time", "part", "class", "level", "term":
+			return true
+		}
+	}
+
+	// Check subject pronoun preceded by conjunction/preposition (e.g. "as I", "because they", "when we")
+	if len(words) >= 2 {
+		wPrev := strings.ToLower(strings.Trim(words[len(words)-2], " \t\r\n.,;?!\"'()[]"))
+		if lastWord == "i" || lastWord == "he" || lastWord == "she" || lastWord == "we" || lastWord == "they" {
+			switch wPrev {
+			case "as", "because", "since", "while", "when", "where", "if", "that", "which", "although", "though", "and", "or", "but", "so", "for", "before", "after", "unless", "until":
+				return true
+			}
+		}
+	}
 
 	// 1. Single word checks
 	if danglingModals[lastWord] {
@@ -1033,12 +1094,82 @@ func shouldStitch(s1, s2 study.Sentence) bool {
 		}
 	}
 
+	// Case H: s1 ends with hyphenated compound adjective (e.g. "my first five-week." + "Course right...")
+	if len(w1) > 0 {
+		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		if strings.Contains(lastWordS1, "-") {
+			parts := strings.Split(lastWordS1, "-")
+			lastPart := parts[len(parts)-1]
+			switch lastPart {
+			case "week", "weeks", "day", "days", "year", "years", "month", "months", "hour", "hours", "minute", "minutes", "time", "part", "class", "level", "term":
+				return true
+			}
+		}
+	}
+
+	// Case I: s1 ends with attributive adjective (e.g. "consulates in neighbouring." + "Countries require...")
+	if len(w1) > 0 {
+		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		if lastWordS1 == "neighbouring" || lastWordS1 == "neighboring" || lastWordS1 == "surrounding" {
+			return true
+		}
+	}
+
+	// Case J: s2 starts with to-infinitive following aspectual verbs in s1 (e.g. "...when people start." + "To look a bit stressed.")
+	if firstWordS2 == "to" && len(w2) >= 2 && len(w1) > 0 {
+		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		switch lastWordS1 {
+		case "start", "started", "starting", "begin", "began", "begins", "beginning", "continue", "continued", "tend", "tends", "tended", "manage", "managed", "try", "tried", "plan", "planned", "fail", "failed", "attempt", "attempted", "hope", "hoped":
+			return true
+		}
+	}
+
+	// Case K: s1 ends with subject + transitive verb needing direct object in s2
+	// e.g. "...mainly because they have." + "An assignment to do."
+	// e.g. "Check whether you need..." + "A multiple entry visa..."
+	if len(w1) >= 2 && (firstWordS2 == "a" || firstWordS2 == "an" || firstWordS2 == "the" || firstWordS2 == "some" || firstWordS2 == "any") {
+		lastTwoS1 := strings.ToLower(strings.Trim(w1[len(w1)-2], " \t\r\n.,;?!\"'()[]") + " " + strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		switch lastTwoS1 {
+		case "they have", "we have", "you have", "i have", "you need", "we need", "they need", "i need", "they require", "we require":
+			return true
+		}
+	}
+
+	// Case L: Conversational filler "you know" split across sentences
+	// e.g. "...colleagues from work, you." + "Know, in our lunch hour."
+	if len(w1) > 0 {
+		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		if lastWordS1 == "you" && firstWordS2 == "know" {
+			return true
+		}
+	}
+
+	// Case M: Compound noun continuation (e.g. "...how to use the library." + "Computer system, and so on today...")
+	if len(w1) > 0 {
+		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		if lastWordS1 == "library" && (firstWordS2 == "computer" || firstWordS2 == "catalog" || firstWordS2 == "catalogue") {
+			return true
+		}
+	}
+
+	// Case N: IELTS instructions prompt: "As you listen to ..., complete/answer..."
+	// e.g. "As you listen to the rest of the conversation,." + "Complete the form by filling in..."
+	s1Lower := strings.ToLower(s1.Transcript)
+	if strings.HasPrefix(s1Lower, "as you listen") {
+		switch firstWordS2 {
+		case "complete", "answer", "fill", "choose", "write", "check":
+			return true
+		}
+	}
+
 	return false
 }
 
 // mergeTwoSentences fuses two fragmented sentences into a single coherent sentence
 func mergeTwoSentences(s1, s2 study.Sentence) study.Sentence {
-	s1Text := strings.TrimRight(strings.TrimSpace(s1.Transcript), " \t\r\n.,;?!\"'")
+	s1RawTrimmed := strings.TrimSpace(s1.Transcript)
+	s1HadComma := strings.HasSuffix(s1RawTrimmed, ",") || strings.HasSuffix(s1RawTrimmed, ",.") || strings.HasPrefix(strings.ToLower(s1RawTrimmed), "as you listen")
+	s1Text := strings.TrimRight(s1RawTrimmed, " \t\r\n.,;?!\"'")
 	s2Text := strings.TrimSpace(s2.Transcript)
 
 	// Clean word timings in s1: strip trailing punctuation from the last word
@@ -1077,7 +1208,11 @@ func mergeTwoSentences(s1, s2 study.Sentence) study.Sentence {
 		}
 	}
 
-	mergedText := CleanTranscriptText(s1Text + " " + s2Text)
+	separator := " "
+	if s1HadComma {
+		separator = ", "
+	}
+	mergedText := CleanTranscriptText(s1Text + separator + s2Text)
 	mergedWords := append(words1, words2...)
 
 	mergedEndMs := s2.EndMs

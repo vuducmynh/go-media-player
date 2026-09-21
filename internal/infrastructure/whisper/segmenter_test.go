@@ -343,6 +343,22 @@ func TestCleanTranscriptText(t *testing.T) {
 			"I'm going to start with the.",
 			"I'm going to start with the...",
 		},
+		{
+			"we advise medium denomin ations .",
+			"We advise medium denominations.",
+		},
+		{
+			"colleagues from work, you. Know, in our lunch hour .",
+			"Colleagues from work, you know, in our lunch hour.",
+		},
+		{
+			"Australian dollars.us dollars are starting .",
+			"Australian dollars. US dollars are starting.",
+		},
+		{
+			"rest of the conversation,. Complete the form",
+			"Rest of the conversation, complete the form",
+		},
 	}
 
 	for _, tt := range tests {
@@ -568,5 +584,238 @@ func TestProcessSegmentsSentenceStitcher(t *testing.T) {
 	if res4[0].Transcript != expected4 {
 		t.Errorf("Test 4 transcript = %q, want %q", res4[0].Transcript, expected4)
 	}
+
+	// Test 5: Subordinate subject pronoun split ("after the lecture, as I." + "Have a book list here.")
+	raw5 := []WhisperSegment{
+		{
+			Text:    "after the lecture, as I.",
+			Offsets: WhisperOffsets{From: 40000, To: 42000},
+			Tokens: []WhisperToken{
+				{Text: "after", Offsets: WhisperOffsets{From: 40000, To: 40400}},
+				{Text: " the", Offsets: WhisperOffsets{From: 40400, To: 40700}},
+				{Text: " lecture,", Offsets: WhisperOffsets{From: 40700, To: 41200}},
+				{Text: " as", Offsets: WhisperOffsets{From: 41200, To: 41600}},
+				{Text: " I.", Offsets: WhisperOffsets{From: 41600, To: 42000}},
+			},
+		},
+		{
+			Text:    "Have a book list here.",
+			Offsets: WhisperOffsets{From: 42200, To: 44000},
+			Tokens: []WhisperToken{
+				{Text: "Have", Offsets: WhisperOffsets{From: 42200, To: 42600}},
+				{Text: " a", Offsets: WhisperOffsets{From: 42600, To: 42800}},
+				{Text: " book", Offsets: WhisperOffsets{From: 42800, To: 43200}},
+				{Text: " list", Offsets: WhisperOffsets{From: 43200, To: 43600}},
+				{Text: " here.", Offsets: WhisperOffsets{From: 43600, To: 44000}},
+			},
+		},
+	}
+	res5 := segmenter.ProcessSegments(raw5)
+	if len(res5) != 1 {
+		t.Fatalf("Test 5 expected 1 stitched sentence, got %d: %+v", len(res5), res5)
+	}
+	expected5 := "After the lecture, as I have a book list here."
+	if res5[0].Transcript != expected5 {
+		t.Errorf("Test 5 transcript = %q, want %q", res5[0].Transcript, expected5)
+	}
+
+	// Test 6: Hyphenated compound adjective ("my first five-week." + "Course right.")
+	raw6 := []WhisperSegment{
+		{
+			Text:    "my first five-week.",
+			Offsets: WhisperOffsets{From: 50000, To: 52000},
+			Tokens: []WhisperToken{
+				{Text: "my", Offsets: WhisperOffsets{From: 50000, To: 50400}},
+				{Text: " first", Offsets: WhisperOffsets{From: 50400, To: 50900}},
+				{Text: " five-week.", Offsets: WhisperOffsets{From: 50900, To: 52000}},
+			},
+		},
+		{
+			Text:    "Course right.",
+			Offsets: WhisperOffsets{From: 52200, To: 54000},
+			Tokens: []WhisperToken{
+				{Text: "Course", Offsets: WhisperOffsets{From: 52200, To: 53000}},
+				{Text: " right.", Offsets: WhisperOffsets{From: 53000, To: 54000}},
+			},
+		},
+	}
+	res6 := segmenter.ProcessSegments(raw6)
+	if len(res6) != 1 {
+		t.Fatalf("Test 6 expected 1 stitched sentence, got %d: %+v", len(res6), res6)
+	}
+	expected6 := "My first five-week course right."
+	if res6[0].Transcript != expected6 {
+		t.Errorf("Test 6 transcript = %q, want %q", res6[0].Transcript, expected6)
+	}
+
+	// Test 7: Attributive participle adjective ("in neighbouring." + "Countries require you.")
+	raw7 := []WhisperSegment{
+		{
+			Text:    "in neighbouring.",
+			Offsets: WhisperOffsets{From: 60000, To: 61500},
+			Tokens: []WhisperToken{
+				{Text: "in", Offsets: WhisperOffsets{From: 60000, To: 60300}},
+				{Text: " neighbouring.", Offsets: WhisperOffsets{From: 60300, To: 61500}},
+			},
+		},
+		{
+			Text:    "Countries require you.",
+			Offsets: WhisperOffsets{From: 61700, To: 63500},
+			Tokens: []WhisperToken{
+				{Text: "Countries", Offsets: WhisperOffsets{From: 61700, To: 62400}},
+				{Text: " require", Offsets: WhisperOffsets{From: 62400, To: 63000}},
+				{Text: " you.", Offsets: WhisperOffsets{From: 63000, To: 63500}},
+			},
+		},
+	}
+	res7 := segmenter.ProcessSegments(raw7)
+	if len(res7) != 1 {
+		t.Fatalf("Test 7 expected 1 stitched sentence, got %d: %+v", len(res7), res7)
+	}
+	expected7 := "In neighbouring countries require you."
+	if res7[0].Transcript != expected7 {
+		t.Errorf("Test 7 transcript = %q, want %q", res7[0].Transcript, expected7)
+	}
+
+	// Test 8: Verb taking to-infinitive ("when people start." + "To look a bit stressed.")
+	raw8 := []WhisperSegment{
+		{
+			Text:    "when people start.",
+			Offsets: WhisperOffsets{From: 70000, To: 71500},
+			Tokens: []WhisperToken{
+				{Text: "when", Offsets: WhisperOffsets{From: 70000, To: 70400}},
+				{Text: " people", Offsets: WhisperOffsets{From: 70400, To: 70900}},
+				{Text: " start.", Offsets: WhisperOffsets{From: 70900, To: 71500}},
+			},
+		},
+		{
+			Text:    "To look a bit stressed.",
+			Offsets: WhisperOffsets{From: 71700, To: 73500},
+			Tokens: []WhisperToken{
+				{Text: "To", Offsets: WhisperOffsets{From: 71700, To: 72000}},
+				{Text: " look", Offsets: WhisperOffsets{From: 72000, To: 72400}},
+				{Text: " a", Offsets: WhisperOffsets{From: 72400, To: 72600}},
+				{Text: " bit", Offsets: WhisperOffsets{From: 72600, To: 72900}},
+				{Text: " stressed.", Offsets: WhisperOffsets{From: 72900, To: 73500}},
+			},
+		},
+	}
+	res8 := segmenter.ProcessSegments(raw8)
+	if len(res8) != 1 {
+		t.Fatalf("Test 8 expected 1 stitched sentence, got %d: %+v", len(res8), res8)
+	}
+	expected8 := "When people start to look a bit stressed."
+	if res8[0].Transcript != expected8 {
+		t.Errorf("Test 8 transcript = %q, want %q", res8[0].Transcript, expected8)
+	}
+
+	// Test 9: Transitive verb object split ("mainly because they have." + "An assignment to do.")
+	raw9 := []WhisperSegment{
+		{
+			Text:    "mainly because they have.",
+			Offsets: WhisperOffsets{From: 80000, To: 82000},
+			Tokens: []WhisperToken{
+				{Text: "mainly", Offsets: WhisperOffsets{From: 80000, To: 80500}},
+				{Text: " because", Offsets: WhisperOffsets{From: 80500, To: 81000}},
+				{Text: " they", Offsets: WhisperOffsets{From: 81000, To: 81400}},
+				{Text: " have.", Offsets: WhisperOffsets{From: 81400, To: 82000}},
+			},
+		},
+		{
+			Text:    "An assignment to do.",
+			Offsets: WhisperOffsets{From: 82200, To: 84000},
+			Tokens: []WhisperToken{
+				{Text: "An", Offsets: WhisperOffsets{From: 82200, To: 82500}},
+				{Text: " assignment", Offsets: WhisperOffsets{From: 82500, To: 83200}},
+				{Text: " to", Offsets: WhisperOffsets{From: 83200, To: 83500}},
+				{Text: " do.", Offsets: WhisperOffsets{From: 83500, To: 84000}},
+			},
+		},
+	}
+	res9 := segmenter.ProcessSegments(raw9)
+	if len(res9) != 1 {
+		t.Fatalf("Test 9 expected 1 stitched sentence, got %d: %+v", len(res9), res9)
+	}
+	expected9 := "Mainly because they have an assignment to do."
+	if res9[0].Transcript != expected9 {
+		t.Errorf("Test 9 transcript = %q, want %q", res9[0].Transcript, expected9)
+	}
+
+	// Test 10: Compound noun split ("how to use the library." + "Computer system.")
+	raw10 := []WhisperSegment{
+		{
+			Text:    "how to use the library.",
+			Offsets: WhisperOffsets{From: 90000, To: 92000},
+			Tokens: []WhisperToken{
+				{Text: "how", Offsets: WhisperOffsets{From: 90000, To: 90300}},
+				{Text: " to", Offsets: WhisperOffsets{From: 90300, To: 90600}},
+				{Text: " use", Offsets: WhisperOffsets{From: 90600, To: 91000}},
+				{Text: " the", Offsets: WhisperOffsets{From: 91000, To: 91300}},
+				{Text: " library.", Offsets: WhisperOffsets{From: 91300, To: 92000}},
+			},
+		},
+		{
+			Text:    "Computer system.",
+			Offsets: WhisperOffsets{From: 92200, To: 93800},
+			Tokens: []WhisperToken{
+				{Text: "Computer", Offsets: WhisperOffsets{From: 92200, To: 93000}},
+				{Text: " system.", Offsets: WhisperOffsets{From: 93000, To: 93800}},
+			},
+		},
+	}
+	res10 := segmenter.ProcessSegments(raw10)
+	if len(res10) != 1 {
+		t.Fatalf("Test 10 expected 1 stitched sentence, got %d: %+v", len(res10), res10)
+	}
+	expected10 := "How to use the library computer system."
+	if res10[0].Transcript != expected10 {
+		t.Errorf("Test 10 transcript = %q, want %q", res10[0].Transcript, expected10)
+	}
+
+	// Test 11: IELTS prompt clause ("As you listen to the rest of the conversation,." + "Complete the form by filling in.")
+	raw11 := []WhisperSegment{
+		{
+			Text:    "As you listen to the rest of the conversation,.",
+			Offsets: WhisperOffsets{From: 100000, To: 103000},
+			Tokens: []WhisperToken{
+				{Text: "As", Offsets: WhisperOffsets{From: 100000, To: 100400}},
+				{Text: " you", Offsets: WhisperOffsets{From: 100400, To: 100700}},
+				{Text: " listen", Offsets: WhisperOffsets{From: 100700, To: 101200}},
+				{Text: " to", Offsets: WhisperOffsets{From: 101200, To: 101500}},
+				{Text: " the", Offsets: WhisperOffsets{From: 101500, To: 101800}},
+				{Text: " rest", Offsets: WhisperOffsets{From: 101800, To: 102200}},
+				{Text: " of", Offsets: WhisperOffsets{From: 102200, To: 102500}},
+				{Text: " the", Offsets: WhisperOffsets{From: 102500, To: 102700}},
+				{Text: " conversation,.", Offsets: WhisperOffsets{From: 102700, To: 103000}},
+			},
+		},
+		{
+			Text:    "Complete the form by filling in the numbered spaces six to ten.",
+			Offsets: WhisperOffsets{From: 103200, To: 108000},
+			Tokens: []WhisperToken{
+				{Text: "Complete", Offsets: WhisperOffsets{From: 103200, To: 104000}},
+				{Text: " the", Offsets: WhisperOffsets{From: 104000, To: 104400}},
+				{Text: " form", Offsets: WhisperOffsets{From: 104400, To: 104900}},
+				{Text: " by", Offsets: WhisperOffsets{From: 104900, To: 105200}},
+				{Text: " filling", Offsets: WhisperOffsets{From: 105200, To: 105700}},
+				{Text: " in", Offsets: WhisperOffsets{From: 105700, To: 106000}},
+				{Text: " the", Offsets: WhisperOffsets{From: 106000, To: 106300}},
+				{Text: " numbered", Offsets: WhisperOffsets{From: 106300, To: 106800}},
+				{Text: " spaces", Offsets: WhisperOffsets{From: 106800, To: 107300}},
+				{Text: " six", Offsets: WhisperOffsets{From: 107300, To: 107600}},
+				{Text: " to", Offsets: WhisperOffsets{From: 107600, To: 107800}},
+				{Text: " ten.", Offsets: WhisperOffsets{From: 107800, To: 108000}},
+			},
+		},
+	}
+	res11 := segmenter.ProcessSegments(raw11)
+	if len(res11) != 1 {
+		t.Fatalf("Test 11 expected 1 stitched sentence, got %d: %+v", len(res11), res11)
+	}
+	expected11 := "As you listen to the rest of the conversation, complete the form by filling in the numbered spaces six to ten."
+	if res11[0].Transcript != expected11 {
+		t.Errorf("Test 11 transcript = %q, want %q", res11[0].Transcript, expected11)
+	}
 }
+
 
