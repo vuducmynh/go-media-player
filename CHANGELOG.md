@@ -4,6 +4,28 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.11] - 21/09/2026
+
+# Tự Động Vá Lành & Chống Cắt Vụn Câu Luyện Nghe, Xóa Bỏ Dấu Chấm Giữa Chừng & Ghép Nối Đa Tầng Ranh Giới Whisper
+
+Bản cập nhật v1.3.11 giải quyết toàn diện vấn đề ngắt vụn câu (sentence fragmentation) - một trong những hạn chế lớn nhất khi dùng AI nhận diện giọng nói phục vụ luyện nghe (IELTS, bài giảng, podcast). Thuật toán phân đoạn câu mới bảo vệ tính toàn vẹn ngữ pháp, triệt tiêu việc ngắt câu khi đang dở dang ý, xóa bỏ hoàn toàn dấu chấm câu xuất hiện ở giữa câu do ranh giới cửa sổ 30 giây của Whisper, và tự động khâu liền các phân mảnh câu thành một câu hoàn chỉnh, liền mạch và tự nhiên.
+
+### Cải tiến & Khắc phục lỗi (4)
+- **Hệ thống nhận diện cụm từ ngữ pháp dở dang (Grammar Completeness Guard)**:
+  - Bổ sung từ điển ngữ pháp toàn diện kiểm soát các cấu trúc không thể kết thúc câu: giới từ (`without`, `to`, `of`, `in`, `for`, `on`, `about`, `into`, `through`, `under`...), mạo từ & từ chỉ định (`the`, `a`, `an`, `this`, `that`, `these`, `those`, `your`, `our`, `their`...), liên từ (`and`, `or`, `but`, `so`, `because`, `while`, `although`...), trợ động từ & động từ khiếm khuyết (`been`, `has been`, `have been`, `will be`, `is`, `are`, `was`, `were`, `will`, `would`, `can`, `could`, `should`...), và các tính từ/phân từ đòi hỏi danh từ bổ nghĩa (`numbered`, `written`, `longer`, `special`, `cautious`, `difficult`...).
+  - Ngăn chặn triệt để thuật toán cắt câu khi câu đang dừng lại ở các cấu trúc dở dang này, bảo đảm câu luyện nghe luôn đầy đủ chủ ngữ - vị ngữ - tân ngữ.
+- **Triệt tiêu dấu chấm câu sai lệch & Hạ chữ hoa khi câu tiếp diễn (Premature Punctuation Healing)**:
+  - Khi Whisper tự ý đặt dấu chấm ở cuối cửa sổ 30s (`...so that has been.`) nhưng câu chưa kết thúc, hệ thống tự động loại bỏ dấu chấm giả mạo, chuyển từ tiếp theo về chữ thường tự nhiên (`Written on the form.` ➔ `written on the form.`), ghép thành một câu duy nhất: `So that has been written on the form.`
+  - Bảo vệ tuyệt đối các trường hợp số thập phân (`5.45`), tên miền (`volcaenglish.com`), và khoảng số thứ tự (`questions 15 to 20.`).
+- **Cơ chế khâu nối câu phân mảnh đa tầng (Multi-Pass Sentence Stitcher)**:
+  - Thuật toán khâu nối tự động quét và hợp nhất các câu bị cắt đôi hoặc cắt ba (e.g. `You will now.` + `Have half a minute to check your.` + `Answers.` ➔ `You will now have half a minute to check your answers.`).
+  - Hợp nhất đồng thời thời gian âm thanh (`StartMs`, `EndMs`) và mảng từ ngữ chi tiết (`WordTiming`) để giữ tính đồng bộ chuẩn xác từng mili-giây khi người dùng luyện nghe chép chính tả (Dictation) hoặc lặp lại từng từ (Shadowing).
+- **Nâng cấp ngưỡng ngắt câu theo khoảng lặng (Intelligent Speech Pause Thresholds)**:
+  - Tăng ngưỡng ngắt câu tự nhiên theo khoảng lặng từ 750ms lên 1000ms, đồng thời yêu cầu kiểm tra tính trọn vẹn ngữ pháp trước khi cho phép ngắt câu.
+  - Ngăn chặn hiện tượng speaker chỉ mới hít một hơi ngắn (300-500ms) giữa mệnh đề mà câu đã bị chặt làm đôi.
+
+---
+
 ## [v1.3.10] - 21/09/2026
 
 # Khắc Phục Triệt Để Kẹt Kéo Thả Sidebar, Làm Chủ Độ Phân Giải YouTube 1080p & Mặc Định Âm Lượng Tối Đa 100%

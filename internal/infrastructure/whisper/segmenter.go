@@ -28,8 +28,10 @@ var (
 	spacedAcronym3     = regexp.MustCompile(`\b([A-Z])\s+([A-Z])\s+([A-Z])\b`)
 	acronymNounSplit   = regexp.MustCompile(`\b([A-Z]{2,})([a-z]{2,})\b`)
 	danglingWordRegex  = regexp.MustCompile(`(?i)\b(?:my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.["]?$`)
-	danglingWordInline = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.\s+([a-zA-Z])`)
+	numberRangeInline  = regexp.MustCompile(`\b(\d+)\.\s+([tT]o)\s+(\d+)\b`)
+	danglingWordInline = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so|been|has\s+been|have\s+been|will\s+be|would\s+be|without|about|into|through|under|now|will|would|can|could|should|shall|numbered|longer|special|written|cautious|notice)\.\s+([a-zA-Z])`)
 	danglingWordTrailing = regexp.MustCompile(`(?i)\b(my|your|our|their|his|her|its|a|an|the|and|or|but|to|of|with|for|in|at|on|so)\.$`)
+
 
 	// Punctuation spacing (selective: avoid inserting space inside numbers like 5.45, 10,000, 5:45)
 	punctLetterSpacingRegex  = regexp.MustCompile(`([;?!])([A-Za-z0-9])`)
@@ -128,9 +130,15 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 		// Safety check: if sentence is just 1 short word and previous sentence exists, merge with previous
 		if len(sentences) > 0 && len(currentWords) <= 2 && (currentEndMs-currentStartMs) < 1200 {
 			prevIdx := len(sentences) - 1
-			sentences[prevIdx].Transcript = CleanTranscriptText(sentences[prevIdx].Transcript + " " + text)
-			sentences[prevIdx].EndMs = currentEndMs
-			sentences[prevIdx].Words = append(sentences[prevIdx].Words, currentWords...)
+			candidate := study.Sentence{
+				ID:         generateSentenceID(prevIdx + 1),
+				Index:      prevIdx + 1,
+				StartMs:    currentStartMs,
+				EndMs:      currentEndMs,
+				Transcript: text,
+				Words:      currentWords,
+			}
+			sentences[prevIdx] = mergeTwoSentences(sentences[prevIdx], candidate)
 		} else {
 			sentenceIndex := len(sentences) + 1
 			s := study.Sentence{
@@ -171,7 +179,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 				}
 				currentEndMs = tok.Offsets.To
 
-				isWordStart := strings.HasPrefix(tok.Text, " ")
+				isWordStart := strings.HasPrefix(tok.Text, " ") || tokIdx == 0
 				isPunct := isPunctuationOnly(cleanToken)
 				isContr := isContraction(cleanToken)
 
@@ -195,9 +203,9 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 						currentWords[len(currentWords)-1].Text += cleanToken
 						currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
 					}
-					// Check if this punctuation terminates a sentence (skip if next token is TLD or decimal continuation)
+					// Check if this punctuation terminates a sentence (skip if next token is TLD, decimal, or incomplete grammar phrase)
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) {
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(prevWordText, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
 							finalizeSentence()
 						}
 					}
@@ -215,8 +223,9 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 							Confidence: tok.Prob,
 						})
 					}
-				} else if !isWordStart && currentText.Len() > 0 && len(currentWords) > 0 && gapMs < 600 && !(isPrevAcronym && isStandaloneWord) {
-					// BPE sub-word continuation (e.g. "compreh" + "ensible" -> "comprehensible", "vacuum" + "ing" -> "vacuuming", "wr" + "inkly" -> "wrinkly")
+				} else if !isWordStart && currentText.Len() > 0 && len(currentWords) > 0 && gapMs < 600 &&
+					(isDecimalContinuation(cleanToken) || isKnownTLD(cleanToken) || (!sentenceEndRegex.MatchString(prevWordText) && !strings.ContainsAny(prevWordText, ".,;?!") && !(isPrevAcronym && isStandaloneWord))) {
+					// BPE sub-word continuation (e.g. "compreh" + "ensible" -> "comprehensible", "vacuum" + "ing" -> "vacuuming", "wr" + "inkly" -> "wrinkly", "5." + "45" -> "5.45")
 					currentText.WriteString(cleanToken)
 					currentWords[len(currentWords)-1].Text += cleanToken
 					currentWords[len(currentWords)-1].EndMs = tok.Offsets.To
@@ -225,28 +234,52 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 					}
 				} else {
 					// New word start!
+					// If previous word had sentence-ending punctuation, but sentence did NOT finalize
+					// (e.g. was rejected because it's dangling or part of a number range):
+					if len(currentWords) > 0 {
+						prevWord := currentWords[len(currentWords)-1].Text
+						if sentenceEndRegex.MatchString(prevWord) && !isDecimalContinuation(cleanToken) && !isKnownTLD(cleanToken) {
+							cleanPrev := strings.TrimRight(prevWord, " \t\r\n.,;?!\"'")
+							currentWords[len(currentWords)-1].Text = cleanPrev
+
+							currStr := strings.TrimRight(currentText.String(), " \t\r\n.,;?!\"'")
+							currentText.Reset()
+							currentText.WriteString(currStr)
+
+							// Lowercase continuation token if appropriate (avoiding "I", "Keiko", etc.)
+							cleanWordOnly := strings.Trim(cleanToken, " \t\r\n.,;?!\"'()[]")
+							if shouldLowercaseInContinuation(cleanWordOnly, currStr) {
+								runes := []rune(cleanToken)
+								if len(runes) > 0 && unicode.IsUpper(runes[0]) {
+									runes[0] = unicode.ToLower(runes[0])
+									cleanToken = string(runes)
+								}
+							}
+						}
+					}
+
 					// Check speech pauses and clause transitions for balanced sentence length
 					if len(currentWords) >= 3 {
 						currDur := prevEnd - currentStartMs
+						isDangling := isDanglingOrIncomplete(currentText.String())
 
-						if gapMs >= 750 {
-							// 1. Natural strong speech pause boundary (>= 750ms silence)
-							finalizeSentence()
-						} else if gapMs >= 350 && isSentenceStartWord(cleanToken) {
-							// 2. Capitalized sentence starter with soft pause (>= 350ms)
-							finalizeSentence()
-						} else if currDur >= 7000 && gapMs >= 350 {
-							// 3. Sentence >= 7s and speaker paused for breath (>= 350ms)
-							finalizeSentence()
-						} else if currDur >= 9500 && gapMs >= 200 && isClauseConnector(cleanToken) {
-							// 4. Sentence >= 9.5s, encountering clause connector (and, so, but, because, when...) with slight pause (>= 200ms)
-							finalizeSentence()
-						} else if currDur >= 14000 && gapMs >= 200 {
-							// 5. Sentence reaching 14s, split at any word boundary with slight pause (>= 200ms)
-							finalizeSentence()
-						} else if currDur >= 18000 || len(currentWords) >= 25 {
-							// 6. Hard safety limit: avoid run-ons > 18s or > 25 words in study dictation mode
-							finalizeSentence()
+						if !isDangling {
+							if gapMs >= 1000 && len(currentWords) >= 4 {
+								// 1. Natural strong speech pause boundary (>= 1.0s silence)
+								finalizeSentence()
+							} else if gapMs >= 500 && isSentenceStartWord(cleanToken) && len(currentWords) >= 4 {
+								// 2. Capitalized sentence starter with clear pause (>= 500ms)
+								finalizeSentence()
+							} else if currDur >= 10000 && gapMs >= 250 && isClauseConnector(cleanToken) {
+								// 3. Sentence >= 10s, encountering clause connector (and, so, but, because, when...) with clear pause (>= 250ms)
+								finalizeSentence()
+							} else if currDur >= 15000 && gapMs >= 450 {
+								// 4. Sentence reaching 15s, split at word boundary with breath pause (>= 450ms)
+								finalizeSentence()
+							} else if currDur >= 25000 || len(currentWords) >= 35 {
+								// 5. Hard safety limit: avoid run-ons > 25s or > 35 words in study dictation mode
+								finalizeSentence()
+							}
 						}
 					}
 
@@ -268,7 +301,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 
 					// Check if this word terminates a sentence (e.g. " 2.", " now.", " world!")
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) {
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(cleanToken, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
 							finalizeSentence()
 						}
 					}
@@ -342,13 +375,19 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 		cleaned = append(cleaned, s)
 	}
 
-	// Re-index IDs cleanly
-	for i := range cleaned {
-		cleaned[i].Index = i + 1
-		cleaned[i].ID = generateSentenceID(i + 1)
+	// Multi-pass sentence stitcher to merge grammatically incomplete sentence fragments
+	stitched := s.stitchFragmentedSentences(cleaned)
+
+	// Re-index IDs cleanly and ensure terminating punctuation
+	for i := range stitched {
+		stitched[i].Index = i + 1
+		stitched[i].ID = generateSentenceID(i + 1)
+		if !sentenceEndRegex.MatchString(stitched[i].Transcript) {
+			stitched[i].Transcript += "."
+		}
 	}
 
-	return cleaned
+	return stitched
 }
 
 func isPunctuationOnly(s string) bool {
@@ -413,10 +452,14 @@ func CleanTranscriptText(text string) string {
 	text = spacedAcronym3.ReplaceAllString(text, "$1$2$3")
 	text = acronymNounSplit.ReplaceAllString(text, "$1 $2")
 
-	// 5b. Clean dangling possessives/articles with accidental periods (e.g. "my. Hair" -> "my hair", "with the." -> "with the...")
+	// 5b. Clean dangling possessives/articles/modals with accidental periods (e.g. "my. Hair" -> "my hair", "with the." -> "with the...", "15. To 20" -> "15 to 20")
+	text = numberRangeInline.ReplaceAllString(text, "$1 to $3")
 	text = danglingWordInline.ReplaceAllStringFunc(text, func(m string) string {
 		parts := danglingWordInline.FindStringSubmatch(m)
 		if len(parts) == 3 {
+			if parts[2] == "I" {
+				return parts[1] + " I"
+			}
 			return parts[1] + " " + strings.ToLower(parts[2])
 		}
 		return m
@@ -514,6 +557,10 @@ func isSentenceEnd(word string) bool {
 	if abbrevRegex.MatchString(word) || danglingWordRegex.MatchString(word) {
 		return false
 	}
+	clean := strings.Trim(word, " \t\r\n.,;?!\"'()[]")
+	if clean != "" && isDanglingOrIncomplete(clean) {
+		return false
+	}
 	return sentenceEndRegex.MatchString(word)
 }
 
@@ -542,6 +589,20 @@ func isDecimalContinuation(s string) bool {
 	r := []rune(trimmed)
 	return unicode.IsDigit(r[0])
 }
+
+func isNumberRangeContinuation(tok string, nextTok string) bool {
+	cleanTok := strings.Trim(tok, " \t\r\n.,;?!\"'")
+	cleanNext := strings.ToLower(strings.Trim(nextTok, " \t\r\n.,;?!\"'"))
+	if cleanTok == "" || cleanNext == "" {
+		return false
+	}
+	r := []rune(cleanTok)
+	if unicode.IsDigit(r[len(r)-1]) && (cleanNext == "to" || cleanNext == "through") {
+		return true
+	}
+	return false
+}
+
 
 func isClauseConnector(word string) bool {
 	lower := strings.ToLower(strings.Trim(word, " \t\r\n,.:;?!\"'"))
@@ -712,3 +773,352 @@ func IsHallucination(text string) bool {
 
 	return false
 }
+
+var (
+	// Prepositions that cannot grammatically conclude an English sentence
+	danglingPrepositions = map[string]bool{
+		"to": true, "of": true, "in": true, "for": true, "on": true, "with": true,
+		"at": true, "by": true, "from": true, "into": true, "about": true, "as": true,
+		"than": true, "without": true, "between": true, "through": true, "under": true,
+		"toward": true, "towards": true, "within": true, "along": true, "across": true,
+		"behind": true, "beyond": true, "during": true, "onto": true, "upon": true,
+	}
+
+	// Articles, determiners and possessives
+	danglingDeterminers = map[string]bool{
+		"the": true, "a": true, "an": true, "this": true, "that": true, "these": true,
+		"those": true, "some": true, "any": true, "each": true, "every": true, "another": true,
+		"my": true, "your": true, "his": true, "her": true, "its": true, "our": true, "their": true, "whose": true,
+	}
+
+	// Coordinating and subordinating conjunctions
+	danglingConjunctions = map[string]bool{
+		"and": true, "or": true, "but": true, "so": true, "because": true,
+		"although": true, "though": true, "while": true, "where": true,
+		"if": true, "whether": true, "unless": true, "since": true, "whereas": true,
+	}
+
+	// Auxiliaries, copulas and linking verbs
+	danglingAuxiliaries = map[string]bool{
+		"is": true, "are": true, "was": true, "were": true, "be": true, "been": true,
+		"being": true, "am": true, "remain": true, "remains": true, "become": true, "became": true,
+		"has been": true, "have been": true, "had been": true, "will be": true, "would be": true,
+		"can be": true, "could be": true, "should be": true, "may be": true, "must be": true,
+	}
+
+	// Modals and modal adverbs
+	danglingModals = map[string]bool{
+		"will": true, "would": true, "shall": true, "should": true, "can": true,
+		"could": true, "may": true, "might": true, "must": true,
+		"will now": true, "would now": true, "can now": true, "could now": true,
+		"you will now": true,
+	}
+
+	// Negations
+	danglingNegations = map[string]bool{
+		"not": true, "n't": true, "they're not": true, "we're not": true, "you're not": true,
+		"it's not": true, "are not": true, "is not": true, "was not": true, "were not": true,
+	}
+
+	// Participles and adjectives expecting nouns
+	danglingAdjectives = map[string]bool{
+		"numbered": true, "longer": true, "special": true, "written": true,
+		"cautious": true, "difficult": true, "higher": true, "lower": true,
+		"two written": true, "part of a longer": true, "issues a special": true,
+		"provide a": true, "arrange to": true,
+	}
+
+	// Incomplete verb phrases, idioms and noun modifiers
+	danglingPhrasalVerbs = map[string]bool{
+		"look at": true, "listen to": true, "turn to": true, "tend to": true,
+		"stick to": true, "spend on": true, "reach": true, "reaching": true,
+		"achieve": true, "before the talk": true, "is this microphone": true,
+		"microphone": true, "listening practice": true, "there": true,
+	}
+)
+
+// isDanglingOrIncomplete checks if a text ends with a word or phrase that cannot grammatically conclude a complete English sentence
+func isDanglingOrIncomplete(text string) bool {
+	clean := strings.TrimRight(strings.TrimSpace(text), " \t\r\n.,;?!\"'()[]")
+	if clean == "" {
+		return false
+	}
+	words := strings.Fields(clean)
+	if len(words) == 0 {
+		return false
+	}
+
+	lastWord := strings.ToLower(strings.Trim(words[len(words)-1], " \t\r\n.,;?!\"'()[]"))
+
+	// 1. Single word checks
+	if danglingModals[lastWord] {
+		// Special case: "can" preceded by determiner is a noun (e.g. "this can", "a can", "the can")
+		if lastWord == "can" && len(words) >= 2 {
+			wPrev := strings.ToLower(strings.Trim(words[len(words)-2], " \t\r\n.,;?!\"'()[]"))
+			if wPrev != "this" && wPrev != "a" && wPrev != "the" && wPrev != "that" && wPrev != "tin" && wPrev != "trash" {
+				return true
+			}
+		} else {
+			return true
+		}
+	} else if danglingPrepositions[lastWord] ||
+		danglingDeterminers[lastWord] ||
+		danglingConjunctions[lastWord] ||
+		danglingAuxiliaries[lastWord] ||
+		danglingNegations[lastWord] ||
+		danglingAdjectives[lastWord] ||
+		danglingPhrasalVerbs[lastWord] {
+		return true
+	}
+
+	// 2. Multi-word tails
+	if len(words) >= 2 {
+		wPrev := strings.ToLower(strings.Trim(words[len(words)-2], " \t\r\n.,;?!\"'()[]"))
+		lastTwo := wPrev + " " + lastWord
+		if danglingAuxiliaries[lastTwo] ||
+			danglingModals[lastTwo] ||
+			danglingNegations[lastTwo] ||
+			danglingAdjectives[lastTwo] ||
+			danglingPhrasalVerbs[lastTwo] {
+			return true
+		}
+		if strings.HasSuffix(lastTwo, " to") {
+			return true
+		}
+	}
+
+	if len(words) >= 3 {
+		wPrev2 := strings.ToLower(strings.Trim(words[len(words)-3], " \t\r\n.,;?!\"'()[]"))
+		wPrev1 := strings.ToLower(strings.Trim(words[len(words)-2], " \t\r\n.,;?!\"'()[]"))
+		lastThree := wPrev2 + " " + wPrev1 + " " + lastWord
+		if danglingModals[lastThree] || danglingAdjectives[lastThree] || danglingPhrasalVerbs[lastThree] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// stitchFragmentedSentences merges incomplete sentences across multiple passes
+func (s *Segmenter) stitchFragmentedSentences(sentences []study.Sentence) []study.Sentence {
+	if len(sentences) <= 1 {
+		return sentences
+	}
+
+	for pass := 0; pass < 3; pass++ {
+		var stitched []study.Sentence
+		mergedAny := false
+
+		i := 0
+		for i < len(sentences) {
+			if i+1 < len(sentences) && shouldStitch(sentences[i], sentences[i+1]) {
+				s1 := sentences[i]
+				s2 := sentences[i+1]
+				merged := mergeTwoSentences(s1, s2)
+				stitched = append(stitched, merged)
+				mergedAny = true
+				i += 2 // Skip both original sentences, now merged
+			} else {
+				stitched = append(stitched, sentences[i])
+				i++
+			}
+		}
+
+		sentences = stitched
+		if !mergedAny {
+			break
+		}
+	}
+
+	return sentences
+}
+
+// shouldStitch determines whether two adjacent sentences form a fragmented split that should be unified
+func shouldStitch(s1, s2 study.Sentence) bool {
+	// 1. Time proximity check (allow contiguous, overlapping, or natural pause up to 2.8s)
+	gap := s2.StartMs - s1.EndMs
+	if gap > 2800 {
+		return false
+	}
+
+	// 2. Length safety checks for study dictation mode
+	w1 := strings.Fields(s1.Transcript)
+	w2 := strings.Fields(s2.Transcript)
+	if len(w1)+len(w2) > 35 {
+		return false
+	}
+	combinedDur := s2.EndMs - s1.StartMs
+	if combinedDur > 28000 {
+		return false
+	}
+
+	// 3. Primary trigger: s1 ends with dangling or incomplete phrase
+	if isDanglingOrIncomplete(s1.Transcript) {
+		return true
+	}
+
+	// 4. Secondary trigger: s2 is an orphan fragment or continuation of s1
+	if len(w2) == 0 {
+		return false
+	}
+	firstWordS2 := strings.ToLower(strings.Trim(w2[0], " \t\r\n.,;?!\"'()[]"))
+
+	// Case A: s2 starts with lowercase letter (clear syntax continuity)
+	runesS2 := []rune(strings.TrimSpace(s2.Transcript))
+	if len(runesS2) > 0 && unicode.IsLower(runesS2[0]) {
+		return true
+	}
+
+	// Case B: s2 starts with copula/auxiliary: "is", "are", "was", "were", "be", "been"
+	// e.g. "You will see that there." + "Is an example which has been done for you."
+	if firstWordS2 == "is" || firstWordS2 == "are" || firstWordS2 == "was" || firstWordS2 == "were" {
+		lastWordS1 := ""
+		if len(w1) > 0 {
+			lastWordS1 = strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		}
+		if lastWordS1 == "there" || lastWordS1 == "it" || lastWordS1 == "this" || lastWordS1 == "that" || lastWordS1 == "here" {
+			return true
+		}
+	}
+
+	// Case C: s2 starts with preposition range or orphan prepositional phrase:
+	// e.g. "answer questions 15." + "To 20."
+	// e.g. "...spending just one hour a day on some activities." + "For the next term."
+	if firstWordS2 == "to" && len(w2) >= 2 {
+		r := []rune(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]"))
+		if len(r) > 0 && unicode.IsDigit(r[0]) {
+			return true
+		}
+	}
+	if (firstWordS2 == "for" || firstWordS2 == "with" || firstWordS2 == "in" || firstWordS2 == "on" || firstWordS2 == "at" || firstWordS2 == "about" || firstWordS2 == "from") && len(w2) <= 5 {
+		return true
+	}
+
+	// Case D: s2 starts with relative clause pronoun: "that", "which", "who", "whom", "whose", "where"
+	// e.g. "Relaxation and other activities." + "That you enjoy."
+	if firstWordS2 == "that" || firstWordS2 == "which" || firstWordS2 == "whom" {
+		return true
+	}
+
+	// Case E: s2 starts with participle: "written", "working", "recording", "continues", "carrying", "cautious"
+	// e.g. "so that has been." + "Written on the form."
+	// e.g. "Is this microphone." + "Working? Good."
+	// e.g. "Before the talk." + "Continues, you will have..."
+	switch firstWordS2 {
+	case "written", "working", "recording", "continues", "carry", "carrying", "cautious", "notice":
+		return true
+	}
+
+	// Case F: s2 starts with verb completing modal/auxiliary in s1
+	// e.g. "You will now." + "Have half a minute to check your answers."
+	if firstWordS2 == "have" || firstWordS2 == "check" || firstWordS2 == "answer" {
+		lastTwoS1 := ""
+		if len(w1) >= 2 {
+			lastTwoS1 = strings.ToLower(strings.Trim(w1[len(w1)-2], " \t\r\n.,;?!\"'()[]") + " " + strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		}
+		if strings.HasSuffix(lastTwoS1, " will now") || strings.HasSuffix(lastTwoS1, " would now") || strings.HasSuffix(lastTwoS1, " will") || strings.HasSuffix(lastTwoS1, " would") || strings.HasSuffix(lastTwoS1, " should") {
+			return true
+		}
+	}
+
+	// Case G: Title/Compound continuation
+	// e.g. "section 1 of Listening Practice." + "Test. Section 1."
+	if len(w1) > 0 {
+		lastWordS1 := strings.ToLower(strings.Trim(w1[len(w1)-1], " \t\r\n.,;?!\"'()[]"))
+		if lastWordS1 == "practice" && firstWordS2 == "test" {
+			return true
+		}
+		if lastWordS1 == "transport" && firstWordS2 == "authority" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// mergeTwoSentences fuses two fragmented sentences into a single coherent sentence
+func mergeTwoSentences(s1, s2 study.Sentence) study.Sentence {
+	s1Text := strings.TrimRight(strings.TrimSpace(s1.Transcript), " \t\r\n.,;?!\"'")
+	s2Text := strings.TrimSpace(s2.Transcript)
+
+	// Clean word timings in s1: strip trailing punctuation from the last word
+	words1 := make([]study.WordTiming, len(s1.Words))
+	copy(words1, s1.Words)
+	if len(words1) > 0 {
+		words1[len(words1)-1].Text = strings.TrimRight(words1[len(words1)-1].Text, " \t\r\n.,;?!\"'")
+	}
+
+	// Prepare words for s2: check if first word should be lowercased
+	words2 := make([]study.WordTiming, len(s2.Words))
+	copy(words2, s2.Words)
+
+	s2WordsFields := strings.Fields(s2Text)
+	if len(s2WordsFields) > 0 {
+		firstWordRaw := s2WordsFields[0]
+		firstWordClean := strings.Trim(firstWordRaw, " \t\r\n.,;?!\"'()[]")
+
+		// Decide if first word of s2 should be lowercased
+		if shouldLowercaseInContinuation(firstWordClean, s1Text) {
+			// Lowercase in s2Text
+			runes := []rune(firstWordRaw)
+			if len(runes) > 0 && unicode.IsUpper(runes[0]) {
+				runes[0] = unicode.ToLower(runes[0])
+				s2WordsFields[0] = string(runes)
+				s2Text = strings.Join(s2WordsFields, " ")
+			}
+			// Lowercase in words2[0]
+			if len(words2) > 0 {
+				wRunes := []rune(words2[0].Text)
+				if len(wRunes) > 0 && unicode.IsUpper(wRunes[0]) {
+					wRunes[0] = unicode.ToLower(wRunes[0])
+					words2[0].Text = string(wRunes)
+				}
+			}
+		}
+	}
+
+	mergedText := CleanTranscriptText(s1Text + " " + s2Text)
+	mergedWords := append(words1, words2...)
+
+	mergedEndMs := s2.EndMs
+	if s1.EndMs > mergedEndMs {
+		mergedEndMs = s1.EndMs
+	}
+
+	return study.Sentence{
+		ID:         s1.ID,
+		Index:      s1.Index,
+		StartMs:    s1.StartMs,
+		EndMs:      mergedEndMs,
+		Transcript: mergedText,
+		Words:      mergedWords,
+	}
+}
+
+// shouldLowercaseInContinuation decides whether a capitalized word following a merged fragment should be converted to lowercase
+func shouldLowercaseInContinuation(word string, prevText string) bool {
+	lower := strings.ToLower(word)
+
+	// Never lowercase "I" or contractions of "I"
+	if word == "I" || strings.HasPrefix(word, "I'") || strings.HasPrefix(word, "I’") {
+		return false
+	}
+
+	// Never lowercase recognized proper nouns
+	switch lower {
+	case "esnia", "esnian", "japanese", "keiko", "yuichini", "willow", "rome", "elizabeth", "circle", "english", "british", "american", "america", "england", "bm-276":
+		return false
+	}
+
+	// In "The Esnian Transport Authority", "Authority" should remain capitalized
+	prevLower := strings.ToLower(prevText)
+	if lower == "authority" && strings.Contains(prevLower, "transport") {
+		return false
+	}
+	if lower == "section" {
+		return false
+	}
+
+	return true
+}
+

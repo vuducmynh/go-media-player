@@ -430,3 +430,143 @@ func TestProcessSegmentsClauseConnectorSplit(t *testing.T) {
 		t.Errorf("sentence 1 wrong: %q", result[1].Transcript)
 	}
 }
+
+func TestProcessSegmentsSentenceStitcher(t *testing.T) {
+	segmenter := NewSegmenter()
+
+	// Test 1: Auxiliary split ("has been." + "Written on the form.")
+	raw1 := []WhisperSegment{
+		{
+			Text:    "so that has been.",
+			Offsets: WhisperOffsets{From: 1000, To: 3000},
+			Tokens: []WhisperToken{
+				{Text: "so", Offsets: WhisperOffsets{From: 1000, To: 1300}},
+				{Text: " that", Offsets: WhisperOffsets{From: 1300, To: 1800}},
+				{Text: " has", Offsets: WhisperOffsets{From: 1800, To: 2300}},
+				{Text: " been.", Offsets: WhisperOffsets{From: 2300, To: 3000}},
+			},
+		},
+		{
+			Text:    "Written on the form.",
+			Offsets: WhisperOffsets{From: 3100, To: 5000},
+			Tokens: []WhisperToken{
+				{Text: "Written", Offsets: WhisperOffsets{From: 3100, To: 3700}},
+				{Text: " on", Offsets: WhisperOffsets{From: 3700, To: 4100}},
+				{Text: " the", Offsets: WhisperOffsets{From: 4100, To: 4500}},
+				{Text: " form.", Offsets: WhisperOffsets{From: 4500, To: 5000}},
+			},
+		},
+	}
+
+	res1 := segmenter.ProcessSegments(raw1)
+	if len(res1) != 1 {
+		t.Fatalf("Test 1 expected 1 stitched sentence, got %d: %+v", len(res1), res1)
+	}
+	expected1 := "So that has been written on the form."
+	if res1[0].Transcript != expected1 {
+		t.Errorf("Test 1 transcript = %q, want %q", res1[0].Transcript, expected1)
+	}
+
+	// Test 2: Multi-pass 3-way split ("You will now." + "Have half a minute to check your." + "Answers.")
+	raw2 := []WhisperSegment{
+		{
+			Text:    "You will now.",
+			Offsets: WhisperOffsets{From: 10000, To: 12000},
+			Tokens: []WhisperToken{
+				{Text: "You", Offsets: WhisperOffsets{From: 10000, To: 10500}},
+				{Text: " will", Offsets: WhisperOffsets{From: 10500, To: 11200}},
+				{Text: " now.", Offsets: WhisperOffsets{From: 11200, To: 12000}},
+			},
+		},
+		{
+			Text:    "Have half a minute to check your.",
+			Offsets: WhisperOffsets{From: 12200, To: 15000},
+			Tokens: []WhisperToken{
+				{Text: "Have", Offsets: WhisperOffsets{From: 12200, To: 12700}},
+				{Text: " half", Offsets: WhisperOffsets{From: 12700, To: 13200}},
+				{Text: " a", Offsets: WhisperOffsets{From: 13200, To: 13400}},
+				{Text: " minute", Offsets: WhisperOffsets{From: 13400, To: 14000}},
+				{Text: " to", Offsets: WhisperOffsets{From: 14000, To: 14300}},
+				{Text: " check", Offsets: WhisperOffsets{From: 14300, To: 14600}},
+				{Text: " your.", Offsets: WhisperOffsets{From: 14600, To: 15000}},
+			},
+		},
+		{
+			Text:    "Answers.",
+			Offsets: WhisperOffsets{From: 15200, To: 16500},
+			Tokens: []WhisperToken{
+				{Text: "Answers.", Offsets: WhisperOffsets{From: 15200, To: 16500}},
+			},
+		},
+	}
+
+	res2 := segmenter.ProcessSegments(raw2)
+	if len(res2) != 1 {
+		t.Fatalf("Test 2 expected 1 stitched sentence, got %d: %+v", len(res2), res2)
+	}
+	expected2 := "You will now have half a minute to check your answers."
+	if res2[0].Transcript != expected2 {
+		t.Errorf("Test 2 transcript = %q, want %q", res2[0].Transcript, expected2)
+	}
+
+	// Test 3: Dangling preposition ("change without." + "Notice during the tour.")
+	raw3 := []WhisperSegment{
+		{
+			Text:    "change without.",
+			Offsets: WhisperOffsets{From: 20000, To: 22000},
+			Tokens: []WhisperToken{
+				{Text: "change", Offsets: WhisperOffsets{From: 20000, To: 20800}},
+				{Text: " without.", Offsets: WhisperOffsets{From: 20800, To: 22000}},
+			},
+		},
+		{
+			Text:    "Notice during the tour.",
+			Offsets: WhisperOffsets{From: 22200, To: 24500},
+			Tokens: []WhisperToken{
+				{Text: "Notice", Offsets: WhisperOffsets{From: 22200, To: 22800}},
+				{Text: " during", Offsets: WhisperOffsets{From: 22800, To: 23300}},
+				{Text: " the", Offsets: WhisperOffsets{From: 23300, To: 23700}},
+				{Text: " tour.", Offsets: WhisperOffsets{From: 23700, To: 24500}},
+			},
+		},
+	}
+
+	res3 := segmenter.ProcessSegments(raw3)
+	if len(res3) != 1 {
+		t.Fatalf("Test 3 expected 1 stitched sentence, got %d: %+v", len(res3), res3)
+	}
+	expected3 := "Change without notice during the tour."
+	if res3[0].Transcript != expected3 {
+		t.Errorf("Test 3 transcript = %q, want %q", res3[0].Transcript, expected3)
+	}
+
+	// Test 4: Number range split ("questions 15." + "To 20.")
+	raw4 := []WhisperSegment{
+		{
+			Text:    "questions 15.",
+			Offsets: WhisperOffsets{From: 30000, To: 31500},
+			Tokens: []WhisperToken{
+				{Text: "questions", Offsets: WhisperOffsets{From: 30000, To: 30800}},
+				{Text: " 15.", Offsets: WhisperOffsets{From: 30800, To: 31500}},
+			},
+		},
+		{
+			Text:    "To 20.",
+			Offsets: WhisperOffsets{From: 31700, To: 32500},
+			Tokens: []WhisperToken{
+				{Text: "To", Offsets: WhisperOffsets{From: 31700, To: 32000}},
+				{Text: " 20.", Offsets: WhisperOffsets{From: 32000, To: 32500}},
+			},
+		},
+	}
+
+	res4 := segmenter.ProcessSegments(raw4)
+	if len(res4) != 1 {
+		t.Fatalf("Test 4 expected 1 stitched sentence, got %d: %+v", len(res4), res4)
+	}
+	expected4 := "Questions 15 to 20."
+	if res4[0].Transcript != expected4 {
+		t.Errorf("Test 4 transcript = %q, want %q", res4[0].Transcript, expected4)
+	}
+}
+
