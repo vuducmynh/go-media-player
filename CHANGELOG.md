@@ -4,6 +4,25 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.16] - 22/09/2026
+
+# Đồng Bộ Thuật Toán Chuẩn Hóa Văn Bản Lên Frontend & Triệt Tiêu Lỗi Dính Từ Lúc Xuất Script
+
+Bản vá v1.3.16 đồng bộ hoàn toàn bộ quy tắc tách từ dính (`much less`, `So less`, `an update`, `no-brainer`) và bộ từ điển viết hoa tên riêng công nghệ, model AI (`OpenAI`, `Cloud Code`, `Grokbot`, `Elon Musk`, `Zapier`, `Cursor`...) vào hàm xử lý văn bản `cleanTranscriptTypography` của Frontend, giải quyết triệt để lỗi vô tình dán dính trở lại các từ phó từ so sánh khi người dùng sao chép hoặc xuất file Markdown Script từ giao diện người dùng.
+
+### Cải tiến (1)
+- **Đồng bộ Typography Frontend với Backend (Frontend-Backend Script Normalization Parity)**:
+  - Bổ sung bộ quy tắc phân tách phó từ (`much less`, `So less`, `far less`, `even less`) vào hàm `cleanTranscriptTypography` trên Frontend, bảo đảm chạy ngay sau tầng gom hậu tố từ vị (`bound morphemes`), ngăn chặn việc tự động dán dính `much` + `less` lúc xuất bài đọc.
+  - Đồng bộ danh mục viết hoa thương hiệu công nghệ (`Zapier`, `Cursor`, `Nvidia`, `Samsung`, `Dropbox`, `Shopify`, `Anthropic`, `OpenAI`, `Cloud Code`, `Grokbot`) và phiên bản model AI khi render hoặc xuất Markdown.
+
+### Sửa lỗi (1)
+- **Khắc phục lỗi dán dính từ khi xuất Markdown (Export Markdown Re-fusion Fix)**:
+  - Loại bỏ hoàn toàn tình trạng `muchless expensive` và `Soless total tokens` trong bài đọc liền mạch và bảng chi tiết câu xuất ra.
+
+### Bản vá (0)
+
+---
+
 ## [v1.3.15] - 22/09/2026
 
 # Tối Ưu Phân Đoạn & Chuẩn Hóa Thuật Ngữ AI, Tên Riêng Công Nghệ Cùng Nhịp Điệu Hội Thoại Nhanh

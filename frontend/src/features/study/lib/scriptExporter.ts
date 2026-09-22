@@ -78,6 +78,12 @@ export function cleanTranscriptTypography(text: string): string {
     })
     // 5d. Fix bound-morpheme suffix detachment (e.g. "budget ed" -> "budgeted", "vacuum ing" -> "vacuuming", "spong es" -> "sponges")
     .replace(/\b([a-zA-Z]{2,})\s+(ing|ed|ly|es|tion|sion|ment|ness|ible|ables|ish|ful|less|ize|ise)\b/gi, '$1$2')
+    // 5e. Fix fused adverbs, conjunctions and separated compounds (must run after bound suffixes)
+    .replace(/\b([a-zA-Z]+ly)(less)\b/g, '$1 $2')
+    .replace(/\b(supply)(less)\s+(than)\b/g, '$1 $2 $3')
+    .replace(/\b(much|so|far|even)(less)\b/gi, '$1 $2')
+    .replace(/\b(an|the|this|recent|latest|our|their|a)\s+up\s+date\b/gi, '$1 update')
+    .replace(/\b(a\s+no)\s+brainer\b/gi, '$1-brainer')
     // 6. Ensure single space after punctuation (selective: do not insert space in numbers or decimals)
     .replace(/([;?!])([A-Za-z0-9])/g, '$1 $2')
     .replace(/([:,])([A-Za-z])/g, '$1 $2')
@@ -95,11 +101,23 @@ export function cleanTranscriptTypography(text: string): string {
     // 9. Fix lowercase English pronoun "I" and its contractions
     .replace(/\bi\b/g, 'I')
     .replace(/\bi(['’](?:m|ve|ll|d))\b/gi, (_, p1) => 'I' + p1.toLowerCase())
-    // 10. Capitalize common proper nouns
-    .replace(/\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama)\b/gi, (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase())
+    // 10. Capitalize common proper nouns, tech entities and AI models
+    .replace(/\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama|wellington|auckland|christchurch|queenstown|transcoastal|narahoe|ruapehu|tongariro|zapier|cursor|nvidia|samsung|dropbox|shopify|anthropic)\b/gi, (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase())
+    .replace(/\bopen\s+ai\b/gi, 'OpenAI')
+    .replace(/\bcloud\s+code\b/gi, 'Cloud Code')
+    .replace(/\bgrok\s*bot\b/gi, 'Grokbot')
+    .replace(/\belon('s|\s+musk)\b/gi, (m) => m.toLowerCase().startsWith("elon's") ? "Elon's" : "Elon Musk")
+    .replace(/\b(kimi|kimmy)\s+([kK]\d)\b/gi, (_, _p1, p2) => `Kimi ${p2.toUpperCase()}`)
+    .replace(/\b(grok|fable|opus|astra)\s+(\d+\.\d+|\bmax\b)/gi, (_, p1, p2) => {
+      const name = p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase();
+      const ver = p2.toLowerCase() === 'max' ? 'Max' : p2;
+      return `${name} ${ver}`;
+    })
     // 11. Capitalize letter following sentence punctuation (. ? !)
     .replace(/([.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase())
     // 12. Split run-on clauses before strong sentence transitions
+    .replace(/\b([a-z0-9]+)\s+and\s+speaking\s+of\s+([a-zA-Z]+)\b/gi, '$1. And speaking of $2')
+    .replace(/\b(that's\s+(?:his\s+job|her\s+job|fine|great|good|true|right|okay))\s+that's\b/gi, "$1. That's")
     .replace(/\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There|Get|Tell|Start)\b)/g, '$1. $2')
     // 13. Collapse multiple spaces
     .replace(/\s{2,}/g, ' ')
