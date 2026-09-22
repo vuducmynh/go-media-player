@@ -4,6 +4,36 @@ Tất cả các thay đổi của ứng dụng **Go Audio & Video Player** đư�
 
 ---
 
+## [v1.3.15] - 22/09/2026
+
+# Tối Ưu Phân Đoạn & Chuẩn Hóa Thuật Ngữ AI, Tên Riêng Công Nghệ Cùng Nhịp Điệu Hội Thoại Nhanh
+
+Bản cập nhật v1.3.15 nâng cấp toàn diện thuật toán xử lý phân đoạn câu và chuẩn hóa văn bản Whisper cho các nội dung công nghệ, podcast, video YouTube nhịp độ nhanh với nhiều thuật ngữ kỹ thuật, phiên bản mô hình AI và tên riêng: khâu liền mạch các cấu trúc vị ngữ bán khuyết (`going to + V`), bảo toàn tính từ sở hữu - hạn định (`by my personal` + `Usage`), khôi phục đại từ tân ngữ bị dời chỗ (`whatever I gave` + `It but...`), tự động tách các từ dính chùm (`muchless`, `Soless`, `an up date`, `no-brainer`), viết hoa chuẩn mực thương hiệu và model AI (`OpenAI`, `Elon's`, `Elon Musk`, `Grok 4.7`, `Fable 5.1`, `Opus 5.0`, `Astra Max`, `Kimi K3`, `Zapier`, `Cursor`, `Nvidia`, `Samsung`, `Dropbox`, `Shopify`, `Anthropic`), cùng việc phân tách dấu ngắt câu thoại tự nhiên (`that's his job. That's fine.`, `And speaking of...`).
+
+### Cải tiến (3)
+- **Khâu liền mạch vị ngữ bán khuyết & Cấu trúc tương lai (Semi-modal "going to" Healing)**:
+  - Bổ sung `isGoingToContinuation` ngăn chặn Whisper chém cụt câu tại `is going.` khi từ tiếp theo là `to` / `towards`.
+  - Hợp nhất tự động câu bị cắt rời: `...the cost per task completed is going.` + `To be much higher...` ➔ `...the cost per task completed is going to be much higher...`.
+- **Khâu liền tính từ sở hữu & Đại từ tân ngữ dời chỗ (Possessive Adjectives & Displaced Object Pronouns)**:
+  - Nhận diện tính từ sở hữu - hạn định (`my personal`, `your personal`, v.v.) bị cắt: `...which just by my personal.` + `Usage, that actually...` ➔ `...which just by my personal usage, that actually sounds about right.`.
+  - Khôi phục cấu trúc đại từ tân ngữ đứng trước liên từ: `...whatever I gave.` + `It but once again, fable 5.1 at the top.` ➔ `...whatever I gave it but once again, Fable 5.1 at the top.`.
+- **Chuẩn hóa tên riêng công nghệ & Mô hình AI (AI Models & Tech Entities Capitalization)**:
+  - Tự động chuẩn hóa và viết hoa chính xác các mô hình AI có số phiên bản: `Grok 4.7/4.6`, `Fable 5.1`, `Opus 5.0`, `Astra Max`, `Kimi K3`, `Cloud Code`, `Grokbot`.
+  - Viết hoa chuẩn xác các tên thương hiệu và nhân vật công nghệ: `OpenAI`, `Anthropic`, `Elon Musk`, `Elon's`, `Zapier`, `Cursor`, `Nvidia`, `Samsung`, `Dropbox`, `Shopify`.
+
+### Sửa lỗi (2)
+- **Sửa lỗi dính từ & Tách từ bất thường của Whisper (Fused & Split Words Normalization)**:
+  - Tự động tách các từ dính chùm âm thanh: `muchless` ➔ `much less`, `Soless` ➔ `So less`.
+  - Nối liền danh từ bị ngắt rời: `an up date` ➔ `an update`.
+  - Chuẩn hóa thành ngữ có dấu gạch nối: `a no brainer` ➔ `a no-brainer`.
+- **Bổ sung dấu câu chuyển tiếp hội thoại & tài trợ (Dialogue & Sponsor Transitions)**:
+  - Tách câu chạy liền khi chuyển chủ đề hoặc tài trợ: `much higher and speaking of intelligence,` ➔ `much higher. And speaking of intelligence,`.
+  - Ngắt câu độc lập trong khẩu ngữ: `that's his job that's fine` ➔ `that's his job. That's fine.`.
+
+### Bản vá (0)
+
+---
+
 ## [v1.3.14] - 21/09/2026
 
 # Bảo Toàn Danh Xưng, Chữ Viết Tắt & Khâu Liền Mạch Số Thẻ, Động Từ Khuyết Cùng Chỉ Dẫn IELTS

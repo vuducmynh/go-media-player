@@ -1,6 +1,8 @@
 package whisper
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -1386,6 +1388,170 @@ func TestProcessSegmentsPT2Patterns(t *testing.T) {
 	if res7[0].Transcript != expected7 {
 		t.Errorf("PT2-7 transcript = %q, want %q", res7[0].Transcript, expected7)
 	}
+}
+
+func TestProcessSegmentsAITechAndComparativeSpeech(t *testing.T) {
+	segmenter := NewSegmenter()
+
+	// 1. Text normalization tests for fused words, AI models, and tech entities
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"it is muchless expensive than before.", "It is much less expensive than before."},
+		{"Soless total tokens used, but a higher cost.", "So less total tokens used, but a higher cost."},
+		{"hope we get an up date in grokbot soon.", "Hope we get an update in Grokbot soon."},
+		{"I have a no brainer for you with zapier.", "I have a no-brainer for you with Zapier."},
+		{"developed by open ai and anthropic.", "Developed by OpenAI and Anthropic."},
+		{"we're going to look at elon's tweet about grok 4.7.", "We're going to look at Elon's tweet about Grok 4.7."},
+		{"here is elon musk's reaction to fable 5.1 and opus 5.0.", "Here is Elon Musk's reaction to Fable 5.1 and Opus 5.0."},
+		{"comparing grok 4.7 versus kimmy k3 and astra max.", "Comparing Grok 4.7 versus Kimi K3 and Astra Max."},
+		{"trusted by cursor, nvidia, samsung, dropbox, shopify.", "Trusted by Cursor, Nvidia, Samsung, Dropbox, Shopify."},
+		{"that's his job that's fine.", "That's his job. That's fine."},
+		{"much higher and speaking of intelligence, zapier is great.", "Much higher. And speaking of intelligence, Zapier is great."},
+	}
+
+	for _, tc := range tests {
+		got := CleanTranscriptText(tc.input)
+		if got != tc.expected {
+			t.Errorf("CleanTranscriptText(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+
+	// 2. Case X: Attributive personal + noun ("which just by my personal." + "Usage, that actually sounds about right.")
+	rawX := []WhisperSegment{
+		{
+			Text:    "which just by my personal.",
+			Offsets: WhisperOffsets{From: 10000, To: 12000},
+			Tokens: []WhisperToken{
+				{Text: "which", Offsets: WhisperOffsets{From: 10000, To: 10300}},
+				{Text: " just", Offsets: WhisperOffsets{From: 10300, To: 10600}},
+				{Text: " by", Offsets: WhisperOffsets{From: 10600, To: 10900}},
+				{Text: " my", Offsets: WhisperOffsets{From: 10900, To: 11200}},
+				{Text: " personal.", Offsets: WhisperOffsets{From: 11200, To: 12000}},
+			},
+		},
+		{
+			Text:    "Usage, that actually sounds about right.",
+			Offsets: WhisperOffsets{From: 12200, To: 15000},
+			Tokens: []WhisperToken{
+				{Text: "Usage,", Offsets: WhisperOffsets{From: 12200, To: 12800}},
+				{Text: " that", Offsets: WhisperOffsets{From: 12800, To: 13200}},
+				{Text: " actually", Offsets: WhisperOffsets{From: 13200, To: 13800}},
+				{Text: " sounds", Offsets: WhisperOffsets{From: 13800, To: 14200}},
+				{Text: " about", Offsets: WhisperOffsets{From: 14200, To: 14600}},
+				{Text: " right.", Offsets: WhisperOffsets{From: 14600, To: 15000}},
+			},
+		},
+	}
+	resX := segmenter.ProcessSegments(rawX)
+	if len(resX) != 1 {
+		t.Fatalf("Case X expected 1 stitched sentence, got %d: %+v", len(resX), resX)
+	}
+	expectedX := "Which just by my personal usage, that actually sounds about right."
+	if resX[0].Transcript != expectedX {
+		t.Errorf("Case X transcript = %q, want %q", resX[0].Transcript, expectedX)
+	}
+
+	// 3. Case Y: Semi-modal going to ("cost per task completed is going." + "To be much higher.")
+	rawY := []WhisperSegment{
+		{
+			Text:    "cost per task completed is going.",
+			Offsets: WhisperOffsets{From: 20000, To: 23000},
+			Tokens: []WhisperToken{
+				{Text: "cost", Offsets: WhisperOffsets{From: 20000, To: 20500}},
+				{Text: " per", Offsets: WhisperOffsets{From: 20500, To: 21000}},
+				{Text: " task", Offsets: WhisperOffsets{From: 21000, To: 21500}},
+				{Text: " completed", Offsets: WhisperOffsets{From: 21500, To: 22200}},
+				{Text: " is", Offsets: WhisperOffsets{From: 22200, To: 22500}},
+				{Text: " going.", Offsets: WhisperOffsets{From: 22500, To: 23000}},
+			},
+		},
+		{
+			Text:    "To be much higher.",
+			Offsets: WhisperOffsets{From: 23200, To: 25000},
+			Tokens: []WhisperToken{
+				{Text: "To", Offsets: WhisperOffsets{From: 23200, To: 23600}},
+				{Text: " be", Offsets: WhisperOffsets{From: 23600, To: 24000}},
+				{Text: " much", Offsets: WhisperOffsets{From: 24000, To: 24500}},
+				{Text: " higher.", Offsets: WhisperOffsets{From: 24500, To: 25000}},
+			},
+		},
+	}
+	resY := segmenter.ProcessSegments(rawY)
+	if len(resY) != 1 {
+		t.Fatalf("Case Y expected 1 stitched sentence, got %d: %+v", len(resY), resY)
+	}
+	expectedY := "Cost per task completed is going to be much higher."
+	if resY[0].Transcript != expectedY {
+		t.Errorf("Case Y transcript = %q, want %q", resY[0].Transcript, expectedY)
+	}
+
+	// 4. Case Z: Displaced pronoun before conjunction ("whatever I gave." + "It but once again, fable 5.1 at the top.")
+	rawZ := []WhisperSegment{
+		{
+			Text:    "whatever I gave.",
+			Offsets: WhisperOffsets{From: 30000, To: 32000},
+			Tokens: []WhisperToken{
+				{Text: "whatever", Offsets: WhisperOffsets{From: 30000, To: 30700}},
+				{Text: " I", Offsets: WhisperOffsets{From: 30700, To: 31200}},
+				{Text: " gave.", Offsets: WhisperOffsets{From: 31200, To: 32000}},
+			},
+		},
+		{
+			Text:    "It but once again, fable 5.1 at the top.",
+			Offsets: WhisperOffsets{From: 32200, To: 36000},
+			Tokens: []WhisperToken{
+				{Text: "It", Offsets: WhisperOffsets{From: 32200, To: 32600}},
+				{Text: " but", Offsets: WhisperOffsets{From: 32600, To: 33000}},
+				{Text: " once", Offsets: WhisperOffsets{From: 33000, To: 33400}},
+				{Text: " again,", Offsets: WhisperOffsets{From: 33400, To: 34000}},
+				{Text: " fable", Offsets: WhisperOffsets{From: 34000, To: 34500}},
+				{Text: " 5.1", Offsets: WhisperOffsets{From: 34500, To: 35000}},
+				{Text: " at", Offsets: WhisperOffsets{From: 35000, To: 35300}},
+				{Text: " the", Offsets: WhisperOffsets{From: 35300, To: 35600}},
+				{Text: " top.", Offsets: WhisperOffsets{From: 35600, To: 36000}},
+			},
+		},
+	}
+	resZ := segmenter.ProcessSegments(rawZ)
+	if len(resZ) != 1 {
+		t.Fatalf("Case Z expected 1 stitched sentence, got %d: %+v", len(resZ), resZ)
+	}
+	expectedZ := "Whatever I gave it but once again, Fable 5.1 at the top."
+	if resZ[0].Transcript != expectedZ {
+		t.Errorf("Case Z transcript = %q, want %q", resZ[0].Transcript, expectedZ)
+	}
+}
+
+func TestEvaluateYTAITranscript(t *testing.T) {
+	data, err := os.ReadFile("C:/Users/gdevg/.gemini/antigravity/brain/4f80b9c0-a7ad-480c-a436-f216f250accb/scratch/yt_ai_sentences.json")
+	if err != nil {
+		t.Skip("skipping YT benchmark test: scratch file not found")
+	}
+
+	type SentenceItem struct {
+		Num   int    `json:"num"`
+		Start string `json:"start"`
+		End   string `json:"end"`
+		Text  string `json:"text"`
+	}
+
+	var items []SentenceItem
+	if err := json.Unmarshal(data, &items); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	changedCount := 0
+	for _, item := range items {
+		cleaned := CleanTranscriptText(item.Text)
+		if cleaned != item.Text {
+			changedCount++
+			t.Logf("[%02d] BEFORE: %s", item.Num, item.Text)
+			t.Logf("     AFTER:  %s", cleaned)
+		}
+	}
+	t.Logf("Total sentences cleaned in YT transcript: %d / %d", changedCount, len(items))
 }
 
 

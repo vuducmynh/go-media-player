@@ -38,6 +38,17 @@ var (
 
 	fusedAdverbLessRegex       = regexp.MustCompile(`\b([a-zA-Z]+ly)(less)\b`)
 	fusedSupplyLessRegex       = regexp.MustCompile(`\b(supply)(less)\s+(than)\b`)
+	fusedMuchLessRegex         = regexp.MustCompile(`(?i)\b(much|so|far|even)(less)\b`)
+	separatedUpdateRegex       = regexp.MustCompile(`(?i)\b(an|the|this|recent|latest|our|their|a)\s+up\s+date\b`)
+	noBrainerRegex             = regexp.MustCompile(`(?i)\b(a\s+no)\s+brainer\b`)
+	openAIRegex                = regexp.MustCompile(`(?i)\bopen\s+ai\b`)
+	elonMuskRegex              = regexp.MustCompile(`(?i)\belon('s|\s+musk)\b`)
+	kimiModelRegex             = regexp.MustCompile(`(?i)\b(kimi|kimmy)\s+([kK]\d)\b`)
+	versionedModelRegex        = regexp.MustCompile(`(?i)\b(grok|fable|opus|astra)\s+(\d+\.\d+|\bmax\b)`)
+	cloudCodeRegex             = regexp.MustCompile(`(?i)\bcloud\s+code\b`)
+	grokbotRegex               = regexp.MustCompile(`(?i)\bgrok\s*bot\b`)
+	speakingOfTransitionRegex  = regexp.MustCompile(`(?i)\b([a-z0-9]+)\s+and\s+speaking\s+of\s+([a-zA-Z]+)\b`)
+	thatJobTransitionRegex     = regexp.MustCompile(`(?i)\b(that's\s+(?:his\s+job|her\s+job|fine|great|good|true|right|okay))\s+that's\b`)
 	spellingHyphenRegex        = regexp.MustCompile(`\b([A-Za-z])-\s+([A-Za-z])\b`)
 	creditCardInlineRegex      = regexp.MustCompile(`\b(\d{4}-\d{4})\.\s*(\d{4}-\d{2,4})\b`)
 	creditCardSpacedRegex      = regexp.MustCompile(`\b(\d{4}-\d{4}-\d{4}-)(\d{2})\s+(\d{2})\b`)
@@ -65,7 +76,7 @@ var (
 
 	pronounIRegex        = regexp.MustCompile(`(?i)\b(i)(['’](?:m|ve|ll|d))?\b`)
 	afterPunctRegex      = regexp.MustCompile(`([.!?]\s+)([a-z])`)
-	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama|wellington|auckland|christchurch|queenstown|transcoastal|narahoe|ruapehu|tongariro)\b`)
+	properNounsRegex     = regexp.MustCompile(`(?i)\b(england|america|american|english|spanish|french|german|colorado|chicago|britain|british|hanoi|vietnam|vietnamese|barack|obama|wellington|auckland|christchurch|queenstown|transcoastal|narahoe|ruapehu|tongariro|zapier|cursor|nvidia|samsung|dropbox|shopify|anthropic)\b`)
 	runonTransitionRegex = regexp.MustCompile(`\b([a-z]{2,})\s+((?:Now|It's|Then|So|Today|Here|We're|You're|Let's|This|That|There|Get|Tell|Start)\b)`)
 )
 
@@ -220,7 +231,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 					}
 					// Check if this punctuation terminates a sentence (skip if next token is TLD, decimal, or incomplete grammar phrase)
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(prevWordText, nextTok) && !isCreditCardContinuation(prevWordText, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(prevWordText, nextTok) && !isCreditCardContinuation(prevWordText, nextTok) && !isGoingToContinuation(prevWordText, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
 							finalizeSentence()
 						}
 					}
@@ -316,7 +327,7 @@ func (s *Segmenter) ProcessSegments(rawSegments []WhisperSegment) []study.Senten
 
 					// Check if this word terminates a sentence (e.g. " 2.", " now.", " world!")
 					if isSentenceEnd(cleanToken) && len(currentWords) >= 2 {
-						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(cleanToken, nextTok) && !isCreditCardContinuation(cleanToken, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
+						if !isKnownTLD(nextTok) && !isDecimalContinuation(nextTok) && !isNumberRangeContinuation(cleanToken, nextTok) && !isCreditCardContinuation(cleanToken, nextTok) && !isGoingToContinuation(cleanToken, nextTok) && !isDanglingOrIncomplete(currentText.String()) {
 							finalizeSentence()
 						}
 					}
@@ -527,6 +538,9 @@ func CleanTranscriptText(text string) string {
 	// 5e. Fix fused adverbs and conjunctions (must run after bound suffixes: "slightlyless" -> "slightly less", "supplyless than" -> "supply less than")
 	text = fusedAdverbLessRegex.ReplaceAllString(text, "$1 $2")
 	text = fusedSupplyLessRegex.ReplaceAllString(text, "$1 $2 $3")
+	text = fusedMuchLessRegex.ReplaceAllString(text, "$1 $2")
+	text = separatedUpdateRegex.ReplaceAllString(text, "$1 update")
+	text = noBrainerRegex.ReplaceAllString(text, "$1-brainer")
 
 	// 6. Ensure space after punctuation if followed immediately by letter/number (selective to protect numbers & domains)
 	text = punctLetterSpacingRegex.ReplaceAllString(text, "$1 $2")
@@ -583,12 +597,44 @@ func CleanTranscriptText(text string) string {
 		return m
 	})
 
-	// 11. Capitalize common proper nouns
+	// 11. Capitalize common proper nouns, AI tech brands and versioned models
 	text = properNounsRegex.ReplaceAllStringFunc(text, func(m string) string {
 		runes := []rune(m)
 		if len(runes) > 0 && unicode.IsLower(runes[0]) {
 			runes[0] = unicode.ToUpper(runes[0])
 			return string(runes)
+		}
+		return m
+	})
+	text = openAIRegex.ReplaceAllString(text, "OpenAI")
+	text = cloudCodeRegex.ReplaceAllString(text, "Cloud Code")
+	text = grokbotRegex.ReplaceAllString(text, "Grokbot")
+	text = elonMuskRegex.ReplaceAllStringFunc(text, func(m string) string {
+		lower := strings.ToLower(m)
+		if strings.HasPrefix(lower, "elon's") {
+			return "Elon's"
+		}
+		return "Elon Musk"
+	})
+	text = kimiModelRegex.ReplaceAllStringFunc(text, func(m string) string {
+		parts := kimiModelRegex.FindStringSubmatch(m)
+		if len(parts) == 3 {
+			return "Kimi " + strings.ToUpper(parts[2])
+		}
+		return m
+	})
+	text = versionedModelRegex.ReplaceAllStringFunc(text, func(m string) string {
+		parts := versionedModelRegex.FindStringSubmatch(m)
+		if len(parts) == 3 {
+			runes := []rune(strings.ToLower(parts[1]))
+			if len(runes) > 0 {
+				runes[0] = unicode.ToUpper(runes[0])
+			}
+			ver := parts[2]
+			if strings.EqualFold(ver, "max") {
+				ver = "Max"
+			}
+			return string(runes) + " " + ver
 		}
 		return m
 	})
@@ -617,6 +663,8 @@ func CleanTranscriptText(text string) string {
 	})
 
 	// 13. Split run-on clauses where a lowercase word is followed immediately by a capitalized sentence transition
+	text = speakingOfTransitionRegex.ReplaceAllString(text, "$1. And speaking of $2")
+	text = thatJobTransitionRegex.ReplaceAllString(text, "$1. That's")
 	text = runonTransitionRegex.ReplaceAllString(text, "$1. $2")
 
 	// 14. Collapse any multiple consecutive spaces
@@ -691,6 +739,11 @@ func isCreditCardContinuation(tok string, nextTok string) bool {
 	return creditCardBlockRegex.MatchString(cleanTok) && creditCardStartRegex.MatchString(cleanNext)
 }
 
+func isGoingToContinuation(tok string, nextTok string) bool {
+	cleanPrev := strings.ToLower(strings.Trim(tok, " \t\r\n.,;?!\"'"))
+	cleanNext := strings.ToLower(strings.Trim(nextTok, " \t\r\n.,;?!\"'"))
+	return cleanPrev == "going" && (cleanNext == "to" || cleanNext == "towards")
+}
 
 func isClauseConnector(word string) bool {
 	lower := strings.ToLower(strings.Trim(word, " \t\r\n,.:;?!\"'"))
@@ -927,6 +980,8 @@ var (
 		"people start": true, "they have": true, "because they have": true,
 		"as i have": true, "since they have": true, "whether you need": true,
 		"you need": true, "you know": true, "of direct": true, "in direct": true,
+		"my personal": true, "your personal": true, "our personal": true,
+		"their personal": true, "his personal": true, "her personal": true,
 	}
 )
 
@@ -1270,6 +1325,28 @@ func shouldStitch(s1, s2 study.Sentence) bool {
 		isLinked = true
 	}
 
+	// Case X: Attributive adjective preceded by possessive determiner (e.g. "...by my personal." + "Usage, that actually...")
+	if lastWordS1 == "personal" && len(w1) >= 2 {
+		wPrevS1 := strings.ToLower(strings.Trim(w1[len(w1)-2], " \t\r\n.,;?!\"'()[]"))
+		switch wPrevS1 {
+		case "my", "your", "his", "her", "our", "their":
+			isLinked = true
+		}
+	}
+
+	// Case Y: Semi-modal "going to" severed across sentences (e.g. "...completed is going." + "To be much higher...")
+	if lastWordS1 == "going" && firstWordS2 == "to" && !strings.HasSuffix(strings.TrimSpace(s1.Transcript), "?") {
+		isLinked = true
+	}
+
+	// Case Z: Displaced object pronoun before coordinating conjunction in s2 (e.g. "...whatever I gave." + "It but once again...")
+	if firstWordS2 == "it" && len(w2) >= 2 {
+		secondWordS2 := strings.ToLower(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]"))
+		if secondWordS2 == "but" || secondWordS2 == "and" || secondWordS2 == "so" {
+			isLinked = true
+		}
+	}
+
 	if !isLinked {
 		return false
 	}
@@ -1278,14 +1355,16 @@ func shouldStitch(s1, s2 study.Sentence) bool {
 	maxWords := 35
 	maxDur := int64(28000)
 
-	if isShortOrphan {
-		// When s2 is an orphan fragment (<= 7 words), expand limit to prevent amputating sentence tails
+	isDisplacedPronoun := firstWordS2 == "it" && len(w2) >= 2 && (strings.ToLower(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]")) == "but" || strings.ToLower(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]")) == "and" || strings.ToLower(strings.Trim(w2[1], " \t\r\n.,;?!\"'()[]")) == "so")
+
+	if isShortOrphan || isDisplacedPronoun {
+		// When s2 is an orphan fragment (<= 7 words) or displaced pronoun, expand limit to prevent amputating sentence tails
 		maxWords = 48
 		maxDur = 32000
-	} else if isDanglingOrIncomplete(s1.Transcript) || firstWordS2 == "require" || firstWordS2 == "need" || lastWordS1 == "etc" || lastWordS1 == "mr" || lastWordS1 == "mrs" || lastWordS1 == "ms" || lastWordS1 == "prof" {
-		// When s1 is dangling or completing a relative clause predicate / title
-		maxWords = 52
-		maxDur = 32000
+	} else if isDanglingOrIncomplete(s1.Transcript) || lastWordS1 == "going" || firstWordS2 == "require" || firstWordS2 == "need" || lastWordS1 == "etc" || lastWordS1 == "mr" || lastWordS1 == "mrs" || lastWordS1 == "ms" || lastWordS1 == "prof" {
+		// When s1 is dangling or completing a relative clause predicate / title / semi-modal going to
+		maxWords = 58
+		maxDur = 35000
 	}
 
 	if len(w1)+len(w2) > maxWords {
@@ -1403,7 +1482,7 @@ func shouldLowercaseInContinuation(word string, prevText string) bool {
 
 	// Never lowercase recognized proper nouns
 	switch lower {
-	case "esnia", "esnian", "japanese", "keiko", "yuichini", "willow", "rome", "elizabeth", "circle", "english", "british", "american", "america", "england", "bm-276", "auckland", "wellington", "transcoastal":
+	case "esnia", "esnian", "japanese", "keiko", "yuichini", "willow", "rome", "elizabeth", "circle", "english", "british", "american", "america", "england", "bm-276", "auckland", "wellington", "transcoastal", "zapier", "cursor", "nvidia", "samsung", "dropbox", "shopify", "anthropic", "openai", "elon", "grok", "fable", "opus", "astra", "kimi", "meta", "asana", "gmail", "deepsuite":
 		return false
 	}
 
